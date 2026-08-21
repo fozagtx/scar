@@ -39,9 +39,10 @@ The demo UI on `:7331` reads HydraDB (`GET /graph`, live `recall_for_context`). 
 | `scar/graph/schema.py` | MERGE-on-`id` convention (OpenCypher subset may not have unique constraints). |
 | `scar/graph/queries.py` | **Only file that contains Cypher.** Named ops: `upsert_repo/file/symbol/session/turn/error/correction`, `link_same_signature`, `link_call`, `link_import`, `link_led_to`, `supersede_correction`, `recall_for_context`, `blast_radius`, `export_graph`. |
 | `scar/models.py` | Pydantic shapes for graph labels. Not a second database. |
-| `scar/cli.py` | `scar ingest/recall/record` call `queries.py` through `scar.serve`. |
+| `scar/cli.py` | `scar ingest/recall/record/serve` call `queries.py` through `scar.serve`. `scar mcp` aliases the stdio loop. |
 | `scar/serve/http_api.py` | `POST /v1/recall` and `/v1/record` on `:8765` against the same client. |
-| `scar/serve/mcp_server.py` | MCP tools `scar_recall`, `scar_record`, `scar_blast_radius`. |
+| `scar/serve/mcp_server.py` | Stdio JSON-RPC. Agents spawn `python -m scar.serve.mcp_server`. Tools: `scar_recall`, `scar_record`, `scar_blast_radius`. |
+| `integrations/` | Per-agent spawn configs. Index: `integrations/README.md`. |
 | `scar/ingest/load_graph.py` | Emits `{op, kwargs}` matching query names. Does **not** import Hydra at module import time. |
 | `scripts/demo_api.py` | UI on `:7331`. `GET /graph` is `export_graph`. Recall/blast hit HydraDB. No fixture fallback. |
 

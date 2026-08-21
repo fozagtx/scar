@@ -14,7 +14,15 @@ INTEGRATION_FILES = (
     "integrations/mcp.json.example",
     "integrations/cursor-rule.mdc",
     "integrations/claude-skill.md",
+    "integrations/claude.mcp.json.example",
+    "integrations/codex.toml.example",
+    "integrations/hermes.yaml.example",
+    "integrations/openclaw.json.example",
+    "integrations/README.md",
 )
+
+AGENTS = ("Cursor", "Claude Code", "Codex", "Hermes", "OpenClaw")
+MCP_TOOLS = ("scar_recall", "scar_record", "scar_blast_radius")
 
 
 class FakeGraph:
@@ -245,3 +253,63 @@ def test_integration_instruction_files_exist() -> None:
     assert "scar" in mcp["mcpServers"]
     args = mcp["mcpServers"]["scar"]["args"]
     assert "scar.serve.mcp_server" in " ".join(args)
+    claude_mcp = json.loads(
+        (root / "integrations/claude.mcp.json.example").read_text(encoding="utf-8")
+    )
+    assert claude_mcp["mcpServers"]["scar"]["args"] == ["-m", "scar.serve.mcp_server"]
+    codex = (root / "integrations/codex.toml.example").read_text(encoding="utf-8")
+    assert "[mcp_servers.scar]" in codex
+    hermes = (root / "integrations/hermes.yaml.example").read_text(encoding="utf-8")
+    assert "mcp_servers:" in hermes and "scar:" in hermes
+    openclaw = json.loads(
+        (root / "integrations/openclaw.json.example").read_text(encoding="utf-8")
+    )
+    assert openclaw["mcp"]["servers"]["scar"]["args"] == ["-m", "scar.serve.mcp_server"]
+
+
+def test_readme_showcases_cli_mcp_http_and_five_agents() -> None:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+    src = (root / "scar/serve/mcp_server.py").read_text(encoding="utf-8")
+    for agent in AGENTS:
+        assert agent in readme, agent
+    for tool in MCP_TOOLS:
+        assert tool in readme, tool
+    assert "scar recall" in readme
+    assert "scar record" in readme
+    assert "scar serve" in readme
+    assert "POST /v1/recall" in readme
+    assert "POST /v1/record" in readme
+    assert "python -m scar.serve.mcp_server" in readme
+    assert "scar recall --repo --file" not in readme
+    assert "mcp>=" not in pyproject
+    assert '"mcp"' not in pyproject
+    assert "from mcp" not in src
+    assert "import mcp" not in src
+    toc_headings = (
+        "## Table of contents",
+        "## The problem",
+        "## Why it is different",
+        "## The graph",
+        "## Verify it yourself in 60 seconds",
+        "## Five agents",
+        "## Architecture",
+        "## Requirements",
+        "## Install",
+        "## Record and recall",
+        "## Commands",
+        "## MCP tools (stdio)",
+        "## HTTP",
+        "## What's real vs simplified",
+        "## Engineering decisions",
+        "## Layout",
+        "## Troubleshooting",
+        "## License",
+    )
+    for heading in toc_headings:
+        assert heading in readme, heading
+    assert "[The problem](#the-problem)" in readme
+    assert "[What's real vs simplified](#whats-real-vs-simplified)" in readme

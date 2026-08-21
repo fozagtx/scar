@@ -249,6 +249,20 @@ def test_export_graph_reads_hydradb_nodes(fake_client) -> None:
     assert err.get("file_id") == "file:src/timeutil.py"
 
 
+def test_export_graph_prefers_scar_over_live_test_repos(fake_client) -> None:
+    upsert_repo(fake_client, id="test-repo-deadbeef", root="/tmp/live", language="python")
+    upsert_file(
+        fake_client,
+        id="file:src/live_deadbeef.py",
+        path="src/live_deadbeef.py",
+        language="python",
+        repo_id="test-repo-deadbeef",
+    )
+    upsert_repo(fake_client, id="scar", root="scar", language="python")
+    dumped = export_graph(fake_client)
+    assert dumped["repo"]["id"] == "scar"
+
+
 def test_miner_kwargs_upsert_error(fake_client) -> None:
     upsert_error(
         fake_client,

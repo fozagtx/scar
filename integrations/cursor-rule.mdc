@@ -15,6 +15,8 @@ Do not invent a house rule when SCAR has nothing stored.
 - CLI: `scar recall --repo <id> --file <path> [--symbol NAME] [--error TEXT] [--task TEXT]`
 - HTTP: `POST /v1/recall` with `{repo_id, file_path, symbol, error_text, task_text}`
 
+Same three surfaces for Claude Code, Codex, Hermes, and OpenClaw. Configs live in `integrations/`.
+
 ## After you are corrected
 
 Record the instruction immediately with `scar_record` (MCP), `scar record --repo --file --correction` (CLI), or `POST /v1/record`.

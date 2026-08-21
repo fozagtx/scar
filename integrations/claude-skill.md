@@ -15,4 +15,4 @@ Never invent a house rule. If SCAR says it has no stored correction for this con
 - `scar_record` — `repo_id`, `file_path`, `correction_text`, optional `error_text` (writes a `human_instruction` now)
 - `scar_blast_radius` — `error_id` or `signature` (files that `IMPORTS*` the origin)
 
-Equivalent CLI: `scar recall`, `scar record`, `scar abstain-check`. Equivalent HTTP: `POST /v1/recall`, `POST /v1/record`.
+Equivalent CLI: `scar recall`, `scar record`, `scar abstain-check`. Equivalent HTTP: `POST /v1/recall`, `POST /v1/record`. Same graph as Cursor, Codex, Hermes, and OpenClaw.

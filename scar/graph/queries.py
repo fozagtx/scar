@@ -677,6 +677,37 @@ def _rows_as_dicts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _pick_primary_repo(
+    repos: list[dict[str, Any]], files: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Choose the demo masthead repo. Live pytest leaves test-repo-* vertices."""
+    empty = {"id": "", "root": "", "language": ""}
+    if not repos:
+        return empty
+    unique: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in repos:
+        rid = str(row.get("id") or "")
+        if not rid or rid in seen:
+            continue
+        seen.add(rid)
+        unique.append(row)
+    by_id = {str(row["id"]): row for row in unique}
+    if "scar" in by_id:
+        return by_id["scar"]
+    file_counts: dict[str, int] = {}
+    for row in files:
+        rid = str(row.get("repo_id") or "")
+        if rid:
+            file_counts[rid] = file_counts.get(rid, 0) + 1
+    product = [row for row in unique if not str(row.get("id")).startswith("test-repo-")]
+    pool = product or unique
+    if file_counts:
+        best = max(pool, key=lambda row: file_counts.get(str(row.get("id")), 0))
+        return best
+    return pool[0]
+
+
 def export_graph(client: QueryClient) -> dict[str, Any]:
     """Dump the live HydraDB neighborhood for the demo UI. Empty store is valid."""
     repos = _rows_as_dicts(
@@ -769,7 +800,7 @@ def export_graph(client: QueryClient) -> dict[str, Any]:
                 if row.get("id") == src:
                     row["supersedes_correction_id"] = dst
 
-    repo = repos[0] if repos else {"id": "", "root": "", "language": ""}
+    repo = _pick_primary_repo(repos, files)
     return {
         "repo": repo,
         "repos": repos,
