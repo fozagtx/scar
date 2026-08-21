@@ -13,6 +13,52 @@ Hack Hydra track **2B** (code graphs for IDE assistants). HydraDB OSS is the sys
 - Blast radius over `IMPORTS*` — which files sit downstream of a failure
 - CLI, HTTP (`:8765`), MCP tools, and a no-build demo UI (`:7331`)
 
+## Graph
+
+HydraDB stores this ontology. Recall walks the current file, then `IMPORTS` / `CALLS` neighbors, then error signature. Only an active correction that does not sit behind `SUPERSEDES` is returned. No path → abstain.
+
+```mermaid
+flowchart LR
+  subgraph session["Session"]
+    Session
+    Turn
+    Session -->|HAS_TURN| Turn
+  end
+
+  subgraph code["Code graph"]
+    Importer["File<br/>src/api.py"]
+    File["File<br/>src/timeutil.py"]
+    Symbol["Symbol<br/>timeutil.now"]
+    Callee["Symbol<br/>datetime"]
+    Importer -->|IMPORTS| File
+    File --- Symbol
+    Symbol -->|CALLS| Callee
+  end
+
+  subgraph scars["Corrections"]
+    Fail["Error<br/>utcnow AttributeError"]
+    Retry["Error<br/>retry"]
+    Live["Correction<br/>use datetime.now UTC"]
+    Dead["Correction<br/>superseded"]
+    AP["AntiPattern<br/>banned-utcnow"]
+    Fail -->|LED_TO| Retry
+    Fail -->|SAME_AS| Retry
+    Live -->|FIXES| Fail
+    Live -->|SUPERSEDES| Dead
+    Fail -->|INSTANCE_OF| AP
+  end
+
+  Session -->|IN_REPO| Repo
+  Turn -->|TOUCHED| File
+  Turn -->|EMITTED| Fail
+  Fail -->|IN_FILE| File
+  Fail -->|ON_SYMBOL| Symbol
+  Live -->|STATED_IN| Turn
+  AP -->|FORBIDDEN_IN| Repo
+```
+
+`blast_radius` is `(:File)-[:IMPORTS*]->(:File)<-[:IN_FILE]-(:Error {signature})`. A vector index cannot answer that.
+
 ## Prerequisites
 
 - Python 3.11+
