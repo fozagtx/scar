@@ -219,7 +219,7 @@ def main() -> int:
             "  UID=$(id -u) GID=$(id -g) docker compose up\n"
             "Then extract local sessions and ingest them:\n"
             "  .venv/bin/python -m scar.ingest extracted.jsonl --source all\n"
-            "  .venv/bin/scar ingest extracted.jsonl --repo $(basename \"$PWD\")",
+            "  .venv/bin/scar ingest extracted.jsonl --repo scar",
             file=sys.stderr,
         )
         return 1

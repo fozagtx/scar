@@ -111,7 +111,7 @@ Extract Cursor / Claude Code / Codex history from this machine, then mine it int
 
 ```bash
 .venv/bin/python -m scar.ingest extracted.jsonl --source all
-.venv/bin/scar ingest extracted.jsonl --repo $(basename "$PWD")
+.venv/bin/scar ingest extracted.jsonl --repo scar
 ```
 
 Missing assistant installs write `0` sessions. That is expected. You can also `scar record` a correction from a live session.
