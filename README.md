@@ -93,7 +93,7 @@ python3 -m venv .venv
 .venv/bin/python scripts/demo_api.py
 ```
 
-Open http://127.0.0.1:7331/ . Graph in the center, superseded corrections struck through. Click path: [docs/demo-script.md](docs/demo-script.md).
+Open http://127.0.0.1:7331/ . Graph in the center, superseded corrections struck through. Click path: `bash scripts/record_demo.sh`.
 
 Live graph:
 

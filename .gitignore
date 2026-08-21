@@ -13,4 +13,4 @@ hydradb-data/
 extracted_data/
 node_modules/
 .DS_Store
-.claude-workspace/worktrees/*/worktree/
+.claude-workspace/

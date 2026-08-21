@@ -39,8 +39,6 @@ Fixture UI on `:7331` does **not** require HydraDB. Live seed and CLI recall do.
 | `scar/graph/schema.py` | MERGE-on-`id` convention (OpenCypher subset may not have unique constraints). |
 | `scar/graph/queries.py` | **Only file that contains Cypher.** Named ops: `upsert_repo/file/symbol/session/turn/error/correction`, `link_same_signature`, `link_call`, `link_import`, `link_led_to`, `supersede_correction`, `recall_for_context`, `blast_radius`. |
 | `scar/models.py` | Pydantic shapes for graph labels. Not a second database. |
-| `schema/ontology.cypher` | Human-readable ontology. Runtime writes go through `queries.py`. |
-| `schema/README.md` | Why this is a graph, not a vector store. |
 | `scripts/seed_fixture_graph.py` | Loads `fixtures/demo_graph.json` through named upserts into a live node. |
 | `scar/cli.py` | `scar ingest/recall/record` call `queries.py` through `scar.serve`. |
 | `scar/serve/http_api.py` | `POST /v1/recall` and `/v1/record` on `:8765` against the same client. |
