@@ -1,122 +1,110 @@
 # SCAR
 
-Stored Corrections And Recall: a HydraDB graph of the mistakes coding agents already made, and the human corrections that should stop them making those mistakes again.
+Stored Corrections And Recall. A HydraDB graph of coding-agent errors, human corrections, and the connections between them — so the next session does not repeat the same mistake.
 
-## Problem
+Hack Hydra track **2B** (code graphs for IDE assistants). HydraDB OSS is the system of record; details in [HYDRA.md](HYDRA.md).
 
-Coding agents repeat themselves. A human says "do not use `datetime.utcnow`, we already banned that." The next session embeds the repo, retrieves a nearby chunk, and does it anyway. Similarity is a weak proxy. Two opposed rules ("use utcnow" / "never use utcnow") sit next to each other in vector space. Chronology and overwrite are edges, not cosine.
+## Features
 
-SCAR extracts local Cursor, Claude Code, and Codex transcripts, mines errors and corrections, and stores the **connections** in HydraDB OSS: `FIXES`, `LED_TO`, `SAME_AS`, `CALLS`, `IMPORTS`, `SUPERSEDES`. Before an agent edits, it asks the graph. If nothing matches, the graph **abstains** instead of inventing a house rule.
+- Extract local Cursor, Claude Code, and Codex sessions into one JSONL schema
+- Mine error signatures, retry chains (`LED_TO`), and corrections (`FIXES`, `SUPERSEDES`)
+- Store the graph in HydraDB OSS (`graph-node` over Bolt/HTTP)
+- Recall active corrections for a file/symbol/error; **abstain** when nothing matches
+- Blast radius over `IMPORTS*` — which files sit downstream of a failure
+- CLI, HTTP (`:8765`), MCP tools, and a no-build demo UI (`:7331`)
 
-The workstation graph (no Node, no CDN) is the demo:
+## Prerequisites
 
-```text
-python scripts/demo_api.py
-# open http://127.0.0.1:7331/
-```
+- Python 3.11+
+- Docker, only if you want a live HydraDB node (the demo UI runs without it)
 
-Three panes, graph in the center, superseded corrections struck through. Click path: [docs/demo-script.md](docs/demo-script.md).
+## Getting started
 
-## Graph model
-
-```mermaid
-graph LR
-  Session -->|IN_REPO| Repo
-  Session -->|HAS_TURN| Turn
-  Turn -->|TOUCHED| File
-  Turn -->|EMITTED| Error
-  Error -->|IN_FILE| File
-  Error -->|ON_SYMBOL| Symbol
-  Error -->|SAME_AS| Error
-  Error -->|LED_TO| Error
-  Correction -->|FIXES| Error
-  Correction -->|SUPERSEDES| Correction
-  File -->|IMPORTS| File
-  Symbol -->|CALLS| Symbol
-  Error -->|INSTANCE_OF| AntiPattern
-  AntiPattern -->|FORBIDDEN_IN| Repo
-```
-
-## Why HydraDB
-
-HydraDB OSS is the system of record. `scar/graph/queries.py` is the only file that contains Cypher. `recall_for_context` returns active corrections on the current file, then on `CALLS` / `IMPORTS` neighbors, then by error signature, and drops any correction that another node `SUPERSEDES`. `blast_radius` runs `IMPORTS*1..8` from every file that emitted the same signature — the files an IDE assistant is about to touch if it repeats the failure.
-
-A SQLite table of lesson strings cannot answer "which importers are in the blast radius of this `AttributeError`?" without reimplementing a graph. Vector search will rank the superseded utcnow advice next to the ban. The graph keeps one live `Correction` and a dead one behind `SUPERSEDES`.
-
-See [HYDRA.md](HYDRA.md) for the file-by-file map, ports, and the queries.
-
-## Quick start
-
-Python 3.11+. Docker only if you want a live `graph-node`.
-
-**Minimal (fixture UI, no HydraDB):**
+Fixture demo (no HydraDB):
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e .
 .venv/bin/python scripts/demo_api.py
-# http://127.0.0.1:7331/
-.venv/bin/pytest
 ```
 
-**Full (HydraDB OSS + seed + CLI):**
+Open http://127.0.0.1:7331/ — graph in the center, superseded corrections struck through. Click path: [docs/demo-script.md](docs/demo-script.md).
+
+Live graph:
 
 ```bash
 ./scripts/init-hydradb-data.sh
 UID=$(id -u) GID=$(id -g) docker compose up
-# wait until :9090 /readyz is up
+```
+
+Wait for `:9090` `/readyz`, then:
+
+```bash
 .venv/bin/python scripts/seed_fixture_graph.py
 .venv/bin/scar recall --repo demo-repo --file src/timeutil.py --error "AttributeError utcnow"
 .venv/bin/scar abstain-check --repo demo-repo --file src/unrelated.py
 ```
 
-**Ingest local assistant history (optional):**
+Tests:
+
+```bash
+.venv/bin/pytest
+```
+
+## Usage
+
+Ingest assistant history, then query or record:
 
 ```bash
 .venv/bin/python -m scar.ingest extracted.jsonl --source all
 .venv/bin/scar ingest extracted.jsonl --repo demo-repo
+
+.venv/bin/scar recall --repo demo-repo --file src/timeutil.py --error "AttributeError utcnow"
+.venv/bin/scar record --repo demo-repo --file src/timeutil.py --correction "never use datetime.utcnow"
 ```
 
-**MCP** (Cursor / Claude Desktop): copy [integrations/mcp.json.example](integrations/mcp.json.example). Tools: `scar_recall`, `scar_record`, `scar_blast_radius`. Rule/skill: [integrations/cursor-rule.mdc](integrations/cursor-rule.mdc), [integrations/claude-skill.md](integrations/claude-skill.md).
+| Command | What it does |
+|---|---|
+| `scar ingest <jsonl> --repo <id>` | Mine JSONL and upsert into HydraDB |
+| `scar recall --repo --file [--error] [--symbol]` | Print active corrections or abstain |
+| `scar record --repo --file --correction` | Write a human correction now |
+| `scar abstain-check --repo --file` | Exit 0 only if recall abstains |
+| `scar serve` | HTTP API on `127.0.0.1:8765` |
+| `scar mcp` | MCP stdio (`scar_recall`, `scar_record`, `scar_blast_radius`) |
 
-HTTP for agents is `scar serve` on `127.0.0.1:8765`. The demo UI is a separate process on `7331`.
+MCP config: [integrations/mcp.json.example](integrations/mcp.json.example). Cursor rule / Claude skill: [integrations/cursor-rule.mdc](integrations/cursor-rule.mdc), [integrations/claude-skill.md](integrations/claude-skill.md).
 
-## How HydraDB OSS is used
-
-Image `ghcr.io/hydra-db/hydradb:latest`. Bolt `7687`, HTTP `8443`, admin `9090`. SCAR never calls `api.hydradb.com`.
-
-Without HydraDB you can still show the fixture UI. You cannot persist scars across sessions, run live `scar recall`, or execute `IMPORTS*` blast radius against a real graph. That is the point of the track.
-
-## Architecture
+Recall walks the current file, then `CALLS` / `IMPORTS` neighbors, then error signature. It keeps only `active` corrections that are not the target of `SUPERSEDES`. Empty neighborhood → abstain, never invent a house rule.
 
 ```text
-Cursor / Claude Code / Codex (local disk)
-              |
-              v
-     extractors  ->  frozen JSONL
-              |
-              v
-     miner (signatures, LED_TO, SUPERSEDES)
-              |
-              v
-     HydraDB OSS graph-node
-              |
-        +-----+-----+
-        v           v
-   CLI / MCP / HTTP     demo UI :7331
-   scar  :8765
+local sessions  →  extract  →  mine  →  HydraDB OSS
+                                         ├─ scar CLI / MCP / HTTP :8765
+                                         └─ demo UI :7331 (fixture or SCAR_LIVE=1)
 ```
 
-Extractors are optional. The miner is deterministic (no LLM). The graph client is Bolt-first with HTTP fallback. Recall abstains when the neighborhood is empty.
+## Configuration
 
-## Extractors
+Copy `.env.example`. Compose reads `UID`/`GID` and the token file from `./scripts/init-hydradb-data.sh`.
 
-`scar/ingest/extractors/` reads local Cursor, Claude Code, and Codex session stores (SQLite and JSONL) into one frozen JSONL schema. Missing installs return an empty list.
+| Variable | Default | Used by |
+|---|---|---|
+| `HYDRA_BOLT_URI` | `bolt://127.0.0.1:7687` | Graph client |
+| `HYDRA_HTTP_URI` | `http://127.0.0.1:8443` | HTTP Cypher fallback |
+| `HYDRA_AUTH_TOKEN` | token file / local-dev token | Bolt and HTTP |
+| `HYDRA_ADMIN_URI` | `http://127.0.0.1:9090` | Readiness |
+| `SCAR_LIVE` | unset | Demo UI: try live `recall_for_context` |
+| `SCAR_DEMO_PORT` | `7331` | Demo UI bind port |
 
-## Track, team, license
+Image: `ghcr.io/hydra-db/hydradb:latest`. SCAR does not call `api.hydradb.com`. Cypher lives only in `scar/graph/queries.py`. File-by-file map: [HYDRA.md](HYDRA.md).
 
-- **Hack Hydra track:** 2B — Code graphs for IDE assistants.
-- Supersession, chronology, and abstention are Track 3 behaviors used as graph features, not a second submission.
-- **License:** MIT for SCAR. HydraDB remains a Docker runtime under AGPL-3.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
-- **Tests:** `pytest` — currently 80 passed, 1 skipped (live HydraDB).
-- **Video shot list:** [docs/demo-script.md](docs/demo-script.md). Form paste: [docs/submission.md](docs/submission.md).
+## Troubleshooting
+
+**Demo UI is enough for the graph argument.** Fixture mode on `:7331` does not need Docker.
+
+**`docker compose up` cannot write the store.** The image runs as UID 10001; bind mounts are host-owned. Always pass `UID=$(id -u) GID=$(id -g)` (or let `.env` set them after `init-hydradb-data.sh`).
+
+**Live `scar recall` fails with connection errors.** `graph-node` is not up. Check `curl -sS http://127.0.0.1:9090/readyz` and `HYDRA_BOLT_URI`.
+
+**Extractors print nothing.** Missing Cursor / Claude Code / Codex installs return `[]`. That is expected.
+
+**Port clash.** Agent HTTP is `:8765` (`scar serve`). Demo UI is `:7331`. HydraDB is `7687` / `8443` / `9090`.
