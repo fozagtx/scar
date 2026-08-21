@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+*.egg-info/
+.env
+.env.local
+hydradb-data/
+.hydradb/
+extracted_data/
+node_modules/
+.DS_Store
+.claude-workspace/worktrees/*/worktree/

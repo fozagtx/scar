@@ -1,0 +1,42 @@
+{
+  "session_id": "cursor-happy-path",
+  "source": "cursor",
+  "started_at": "2026-08-20T15:00:00Z",
+  "project_path": "/Users/demo/scar-demo",
+  "model": "gpt-5",
+  "turns": [
+    {
+      "turn_id": "hp-t1",
+      "role": "user",
+      "ts": "2026-08-20T15:00:01Z",
+      "text": "Add a short docstring to src/hello.py explaining what greet returns.",
+      "files": [{"path": "src/hello.py", "language": "python"}],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "hp-t2",
+      "role": "assistant",
+      "ts": "2026-08-20T15:00:08Z",
+      "text": "I'll document greet() in src/hello.py.",
+      "files": [{"path": "src/hello.py", "language": "python"}],
+      "tool_name": "apply_patch",
+      "tool_is_error": false,
+      "exit_code": 0,
+      "diff_summary": "+ def greet(name: str) -> str:\n+     \"\"\"Return a greeting for name.\"\"\"\n"
+    },
+    {
+      "turn_id": "hp-t3",
+      "role": "tool",
+      "ts": "2026-08-20T15:00:12Z",
+      "text": "pytest tests/test_hello.py ... 3 passed in 0.04s",
+      "files": [{"path": "src/hello.py", "language": "python"}],
+      "tool_name": "shell",
+      "tool_is_error": false,
+      "exit_code": 0,
+      "diff_summary": null
+    }
+  ]
+}

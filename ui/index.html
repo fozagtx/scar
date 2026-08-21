@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SCAR · correction graph</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="mast">
+        <div class="mast-brand">
+          <span class="mast-mark" aria-hidden="true">▣</span>
+          <h1>SCAR</h1>
+          <span class="mast-sub">stored corrections and recall</span>
+        </div>
+        <p class="mast-id">
+          <span>repo</span> <code id="mast-repo">demo-repo</code>
+          <span>lang</span> <code id="mast-lang">python</code>
+          <span>store</span> <code>hydradb-oss</code>
+        </p>
+        <p class="mast-mode" id="mast-mode" title="Fixture mode reads demo_graph.json. SCAR_LIVE=1 tries graph-core.">
+          <span class="lamp" aria-hidden="true"></span>
+          <span id="mast-mode-label">FIXTURE</span>
+          <span class="mast-host">127.0.0.1:7331</span>
+        </p>
+      </header>
+
+      <aside class="rail" aria-label="Repo and session">
+        <section>
+          <h2>Repo</h2>
+          <dl class="meta">
+            <div>
+              <dt>id</dt>
+              <dd id="repo-id">—</dd>
+            </div>
+            <div>
+              <dt>root</dt>
+              <dd id="repo-root">—</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section>
+          <h2>Session</h2>
+          <ul class="session-list" id="session-list"></ul>
+        </section>
+
+        <section>
+          <h2>Files</h2>
+          <ul class="file-list" id="file-list"></ul>
+        </section>
+
+        <section>
+          <h2>Legend</h2>
+          <ul class="legend">
+            <li><span class="swatch swatch-file"></span>File</li>
+            <li><span class="swatch swatch-error"></span>Error</li>
+            <li><span class="swatch swatch-correction"></span>Correction</li>
+            <li><span class="swatch swatch-symbol"></span>Symbol</li>
+            <li><span class="swatch swatch-antipattern"></span>AntiPattern</li>
+            <li><span class="swatch swatch-dead"></span>superseded</li>
+          </ul>
+        </section>
+      </aside>
+
+      <main class="stage" aria-label="Correction graph">
+        <div class="stage-hud">
+          <p class="stage-title">GRAPH <span id="graph-counts">0n 0e</span></p>
+          <div class="stage-tools">
+            <button type="button" id="btn-fit">Fit</button>
+            <button type="button" id="btn-clear">Clear hl</button>
+          </div>
+        </div>
+        <div class="stage-frame">
+          <span class="tick tick-tl" aria-hidden="true"></span>
+          <span class="tick tick-tr" aria-hidden="true"></span>
+          <span class="tick tick-bl" aria-hidden="true"></span>
+          <span class="tick tick-br" aria-hidden="true"></span>
+          <svg id="graph" role="img" aria-label="SCAR demo graph: files, errors, corrections, symbols">
+            <defs>
+              <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                <path d="M24 0H0V24" fill="none" stroke="rgba(214,255,63,0.04)" stroke-width="1" />
+              </pattern>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0 0L10 5L0 10Z" />
+              </marker>
+              <marker id="arrow-dead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0 0L10 5L0 10Z" />
+              </marker>
+              <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+                <feGaussianBlur stdDeviation="2.2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect class="grid-bg" width="100%" height="100%" fill="url(#grid)" />
+            <g id="viewport">
+              <g id="edges"></g>
+              <g id="nodes"></g>
+            </g>
+          </svg>
+          <p class="stage-hint" id="stage-hint">click a node · drag canvas · wheel zoom</p>
+        </div>
+      </main>
+
+      <aside class="inspector" aria-label="Recall inspector">
+        <form id="recall-form" autocomplete="off">
+          <h2>Recall</h2>
+          <label>
+            Repo
+            <input id="in-repo" name="repo_id" type="text" value="demo-repo" spellcheck="false" />
+          </label>
+          <label>
+            File
+            <input id="in-file" name="file_path" type="text" value="src/timeutil.py" spellcheck="false" />
+          </label>
+          <label>
+            Symbol
+            <input id="in-symbol" name="symbol" type="text" value="timeutil.now" spellcheck="false" />
+          </label>
+          <label>
+            Error text
+            <input id="in-error" name="error_text" type="text" value="AttributeError utcnow" spellcheck="false" />
+          </label>
+          <div class="actions">
+            <button type="submit" id="btn-recall">Recall</button>
+            <button type="button" id="btn-blast">Blast radius</button>
+          </div>
+          <p class="kbd-hint"><kbd>R</kbd> recall · <kbd>B</kbd> blast · <kbd>Esc</kbd> clear</p>
+        </form>
+        <div class="out-head">
+          <h2>Result</h2>
+          <span id="out-state" class="out-state">idle</span>
+        </div>
+        <div id="out" class="out" role="status" aria-live="polite">
+          <p class="out-idle">
+            Repeat the utcnow mistake on <code>src/timeutil.py</code>. Recall must return the
+            active ban. <code>src/unrelated.py</code> must abstain. The grey struck node is the
+            correction <code>SUPERSEDES</code> killed.
+          </p>
+        </div>
+      </aside>
+
+      <footer class="status">
+        <span id="status-left">loading fixture</span>
+        <span id="status-sel">no selection</span>
+        <span id="status-right">offline SVG · no CDN</span>
+      </footer>
+    </div>
+    <script src="/graph.js" defer></script>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+# HydraDB OSS plaintext graph-node (not api.hydradb.com).
+# The image runs as UID 10001; bind-mounted hydradb-data is owned by the host
+# user, so the host user may need user: "${UID}:${GID}" (compose substitutes
+# from the environment or a gitignored .env). Example:
+#   ./scripts/init-hydradb-data.sh && UID=$(id -u) GID=$(id -g) docker compose up
+services:
+  graph-node:
+    image: ghcr.io/hydra-db/hydradb:latest
+    user: "${UID}:${GID}"
+    ports:
+      - "7687:7687"
+      - "8443:8443"
+      - "9090:9090"
+    environment:
+      CLOUD_PROVIDER: local
+      LOCAL_PATH: /data/store
+      GRAPH_NAMESPACE: default
+      GRAPH_ID: default
+      GRAPH_CELL_ID: cell-0
+      GRAPH_CELLS: cell-0
+      GRAPH_NODE_ID: node-0
+      GRAPH_BOLT_NODE_ADDRESSES: node-0=127.0.0.1:7687
+      GRAPH_ADVERTISED_BOLT_ADDR: 127.0.0.1:7687
+      GRAPH_DATA_CACHE_DIR: /data/cache
+      GRAPH_AUTH_TOKEN_FILE: /data/auth-token
+      GRAPH_ALLOW_PLAINTEXT: "true"
+      RUST_MIN_STACK: "33554432"
+    volumes:
+      - ./hydradb-data/store:/data/store
+      - ./hydradb-data/cache:/data/cache
+      - ./hydradb-data/auth-token:/data/auth-token

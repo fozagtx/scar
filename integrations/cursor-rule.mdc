@@ -1,0 +1,24 @@
+---
+description: Query SCAR before non-trivial edits; obey stored corrections or abstain.
+alwaysApply: true
+---
+
+# SCAR — recall before you edit
+
+Before applying a non-trivial edit, call `scar_recall` with the current file and the error/task. If SCAR returns hits, obey active corrections. If it abstains, proceed normally.
+
+Do not invent a house rule when SCAR has nothing stored.
+
+## How to call it
+
+- MCP tool: `scar_recall` with `repo_id`, `file_path`, and optional `symbol`, `error_text`, `task_text`.
+- CLI: `scar recall --repo <id> --file <path> [--symbol NAME] [--error TEXT] [--task TEXT]`
+- HTTP: `POST /v1/recall` with `{repo_id, file_path, symbol, error_text, task_text}`
+
+## After you are corrected
+
+Record the instruction immediately with `scar_record` (MCP), `scar record --repo --file --correction` (CLI), or `POST /v1/record`.
+
+## Blast radius
+
+If an antipattern fires, call `scar_blast_radius` with the `error_id` (or `signature`) before touching importers.

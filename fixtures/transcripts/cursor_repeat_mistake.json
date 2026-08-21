@@ -1,0 +1,105 @@
+{
+  "session_id": "cursor-repeat-utcnow-001",
+  "source": "cursor",
+  "started_at": "2026-06-01T14:00:00Z",
+  "project_path": "/tmp/demo-repo",
+  "model": "gpt-4.1",
+  "turns": [
+    {
+      "turn_id": "cursor-repeat-utcnow-001:t0000",
+      "role": "user",
+      "ts": "2026-06-01T14:00:01Z",
+      "text": "Add a helper in src/timeutil.py that returns the current UTC time.",
+      "files": [
+        {
+          "path": "src/timeutil.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "cursor-repeat-utcnow-001:t0001",
+      "role": "assistant",
+      "ts": "2026-06-01T14:00:08Z",
+      "text": "I'll add now() using datetime.utcnow in src/timeutil.py.",
+      "files": [
+        {
+          "path": "src/timeutil.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": "added now() via datetime.utcnow()"
+    },
+    {
+      "turn_id": "cursor-repeat-utcnow-001:t0002",
+      "role": "tool",
+      "ts": "2026-06-01T14:00:12Z",
+      "text": "============================= test session starts ==============================\nFAILED tests/test_timeutil.py::test_now - AttributeError: module 'datetime' has no attribute 'utcnow' (datetime.utcnow is naive and banned)\n=========================== short test summary info ============================\nFAILED tests/test_timeutil.py::test_now - AttributeError: utcnow\nexit_code: 1",
+      "files": [
+        {
+          "path": "src/timeutil.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": "run_terminal_command_v2",
+      "tool_is_error": true,
+      "exit_code": 1,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "cursor-repeat-utcnow-001:t0003",
+      "role": "assistant",
+      "ts": "2026-06-01T14:00:15Z",
+      "text": "Retrying with datetime.datetime.utcnow() in src/timeutil.py.",
+      "files": [
+        {
+          "path": "src/timeutil.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": "switched to datetime.datetime.utcnow()"
+    },
+    {
+      "turn_id": "cursor-repeat-utcnow-001:t0004",
+      "role": "tool",
+      "ts": "2026-06-01T14:00:18Z",
+      "text": "Traceback (most recent call last):\n  File \"src/timeutil.py\", line 12, in now\n    return datetime.datetime.utcnow()\nAttributeError: type object 'datetime.datetime' has no attribute 'utcnow'\nFAILED tests/test_timeutil.py::test_now\nexit_code: 1",
+      "files": [
+        {
+          "path": "src/timeutil.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": "run_terminal_command_v2",
+      "tool_is_error": true,
+      "exit_code": 1,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "cursor-repeat-utcnow-001:t0005",
+      "role": "user",
+      "ts": "2026-06-01T14:00:20Z",
+      "text": "do not use datetime.utcnow, we already banned that. Use datetime.now(timezone.utc) in src/timeutil.py.",
+      "files": [
+        {
+          "path": "src/timeutil.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": null
+    }
+  ]
+}

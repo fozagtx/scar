@@ -1,0 +1,121 @@
+{
+  "session_id": "claude-retry-chain-001",
+  "source": "claude-code",
+  "started_at": "2026-06-02T10:00:00Z",
+  "project_path": "/tmp/demo-repo",
+  "model": "claude-sonnet-4-5",
+  "turns": [
+    {
+      "turn_id": "claude-retry-chain-001:t0000",
+      "role": "user",
+      "ts": "2026-06-02T10:00:01Z",
+      "text": "Fix the parse bug in src/parser.py",
+      "files": [
+        {
+          "path": "src/parser.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "claude-retry-chain-001:t0001",
+      "role": "assistant",
+      "ts": "2026-06-02T10:00:04Z",
+      "text": "I'll patch src/parser.py.",
+      "files": [
+        {
+          "path": "src/parser.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "claude-retry-chain-001:t0002",
+      "role": "tool",
+      "ts": "2026-06-02T10:00:05Z",
+      "text": "Edit src/parser.py: insert `def parse(raw): return json.loads(raw`",
+      "files": [
+        {
+          "path": "src/parser.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": "Edit",
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": "Edit src/parser.py"
+    },
+    {
+      "turn_id": "claude-retry-chain-001:t0003",
+      "role": "tool",
+      "ts": "2026-06-02T10:00:06Z",
+      "text": "Traceback (most recent call last):\n  File \"src/parser.py\", line 12\n    return json.loads(raw\n                      ^\nSyntaxError: '(' was never closed\nFAILED tests/test_parser.py::test_parse\nexit_code: 1",
+      "files": [
+        {
+          "path": "src/parser.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": "Bash",
+      "tool_is_error": true,
+      "exit_code": 1,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "claude-retry-chain-001:t0004",
+      "role": "assistant",
+      "ts": "2026-06-02T10:00:10Z",
+      "text": "Closing the parenthesis and retrying the same file.",
+      "files": [
+        {
+          "path": "src/parser.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "claude-retry-chain-001:t0005",
+      "role": "tool",
+      "ts": "2026-06-02T10:00:12Z",
+      "text": "Edit src/parser.py: `return json.loads(raw)` applied.",
+      "files": [
+        {
+          "path": "src/parser.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": "Edit",
+      "tool_is_error": false,
+      "exit_code": 0,
+      "diff_summary": "Edit src/parser.py"
+    },
+    {
+      "turn_id": "claude-retry-chain-001:t0006",
+      "role": "tool",
+      "ts": "2026-06-02T10:00:14Z",
+      "text": "============================= test session starts ==============================\npassed tests/test_parser.py::test_parse\n============================== 1 passed in 0.04s ===============================\nexit_code: 0",
+      "files": [
+        {
+          "path": "src/parser.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": "Bash",
+      "tool_is_error": false,
+      "exit_code": 0,
+      "diff_summary": null
+    }
+  ]
+}

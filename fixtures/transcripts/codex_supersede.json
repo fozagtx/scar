@@ -1,0 +1,73 @@
+{
+  "session_id": "codex-supersede-001",
+  "source": "codex",
+  "started_at": "2026-06-03T09:00:00Z",
+  "project_path": "/tmp/demo-repo",
+  "model": "gpt-5",
+  "turns": [
+    {
+      "turn_id": "codex-supersede-001:t0000",
+      "role": "user",
+      "ts": "2026-06-03T09:00:02Z",
+      "text": "do not use urllib in src/http_client.py; instead use the requests library for fetch_json.",
+      "files": [
+        {
+          "path": "src/http_client.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "codex-supersede-001:t0001",
+      "role": "assistant",
+      "ts": "2026-06-03T09:00:08Z",
+      "text": "Switching fetch_json in src/http_client.py to requests as instructed.",
+      "files": [
+        {
+          "path": "src/http_client.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": "use requests in src/http_client.py"
+    },
+    {
+      "turn_id": "codex-supersede-001:t0002",
+      "role": "user",
+      "ts": "2026-06-03T09:12:00Z",
+      "text": "actually never use requests; ignore previous. now use httpx in src/http_client.py instead of requests.",
+      "files": [
+        {
+          "path": "src/http_client.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": null
+    },
+    {
+      "turn_id": "codex-supersede-001:t0003",
+      "role": "assistant",
+      "ts": "2026-06-03T09:12:10Z",
+      "text": "Updated. fetch_json now uses httpx; previous requests guidance is superseded.",
+      "files": [
+        {
+          "path": "src/http_client.py",
+          "language": "python"
+        }
+      ],
+      "tool_name": null,
+      "tool_is_error": false,
+      "exit_code": null,
+      "diff_summary": "use httpx in src/http_client.py"
+    }
+  ]
+}

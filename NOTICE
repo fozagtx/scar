@@ -1,0 +1,24 @@
+This product includes software and documentation from third parties.
+
+HydraDB
+  Copyright HydraDB contributors
+  https://github.com/hydra-db/hydradb
+  Licensed under the GNU Affero General Public License v3.0
+  SCAR talks to a running graph-node over Bolt/HTTP. It does not vendor
+  HydraDB source. Running HydraDB is a separate AGPL obligation.
+
+neo4j Python driver
+  Copyright Neo4j, Inc.
+  https://github.com/neo4j/neo4j-python-driver
+  Used to speak Bolt to HydraDB OSS.
+
+httpx
+  Copyright encode / httpx authors
+  HTTPS fallback client for HydraDB's JSON query API.
+
+Pydantic
+  Copyright Pydantic contributors
+  Graph entity models in scar/models.py.
+
+pytest
+  Used for the test suite.

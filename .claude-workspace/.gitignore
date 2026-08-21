@@ -1,0 +1,5 @@
+worktrees/*/worktree/
+**/.lock
+**/*.tmp.*
+worktrees/*/STATUS.yml
+integration/MERGE_LOG.md
