@@ -85,30 +85,47 @@ Legend: cyan File, gold Symbol, red Error, acid Correction, mauve AntiPattern, g
 
 ## Getting started
 
-Fixture demo (no HydraDB):
+Install once (Python 3.11+):
 
 ```bash
+git clone https://github.com/fozagtx/scar.git
+cd scar
 python3 -m venv .venv
 .venv/bin/pip install -e .
+```
+
+### 1. Demo UI (no Docker)
+
+```bash
 .venv/bin/python scripts/demo_api.py
 ```
 
 Open http://127.0.0.1:7331/ . Graph in the center, superseded corrections struck through. Click path: `bash scripts/record_demo.sh`.
 
-Live graph:
+### 2. Live HydraDB (local Docker)
 
 ```bash
 ./scripts/init-hydradb-data.sh
 UID=$(id -u) GID=$(id -g) docker compose up
 ```
 
-Wait for `:9090` `/readyz`, then:
+`init-hydradb-data.sh` writes gitignored `./.env` and `./hydradb-data/`. Wait until `curl -sS http://127.0.0.1:9090/readyz` succeeds, then:
 
 ```bash
 .venv/bin/python scripts/seed_fixture_graph.py
 .venv/bin/scar recall --repo demo-repo --file src/timeutil.py --error "AttributeError utcnow"
 .venv/bin/scar abstain-check --repo demo-repo --file src/unrelated.py
 ```
+
+HydraDB stays on `127.0.0.1` (`7687` Bolt, `8443` HTTP, `9090` admin). Not `api.hydradb.com`.
+
+### 3. Local MCP
+
+Copy [integrations/mcp.json.example](integrations/mcp.json.example) into Cursor MCP settings. Point `command` at this repo's `.venv/bin/python` and `cwd` at the repo root. HydraDB must already be up (step 2). Cursor then spawns `python -m scar.serve.mcp_server` on stdio.
+
+Optional: copy [integrations/cursor-rule.mdc](integrations/cursor-rule.mdc) into `.cursor/rules/`. Claude Code: [integrations/claude-skill.md](integrations/claude-skill.md).
+
+HTTP API (also local): `.venv/bin/scar serve` → `http://127.0.0.1:8765`.
 
 Tests:
 
@@ -137,8 +154,6 @@ Ingest assistant history, then query or record:
 | `scar serve` | HTTP API on `127.0.0.1:8765` |
 | `scar mcp` | MCP stdio (`scar_recall`, `scar_record`, `scar_blast_radius`) |
 
-MCP config: [integrations/mcp.json.example](integrations/mcp.json.example). Cursor rule / Claude skill: [integrations/cursor-rule.mdc](integrations/cursor-rule.mdc), [integrations/claude-skill.md](integrations/claude-skill.md).
-
 Recall walks the current file, then `CALLS` / `IMPORTS` neighbors, then error signature. It keeps only `active` corrections that are not the target of `SUPERSEDES`. Empty neighborhood → abstain, never invent a house rule.
 
 ```text
@@ -149,7 +164,7 @@ local sessions  →  extract  →  mine  →  HydraDB OSS
 
 ## Configuration
 
-Copy `.env.example`. Compose reads `UID`/`GID` and the token file from `./scripts/init-hydradb-data.sh`.
+`./scripts/init-hydradb-data.sh` writes `.env` from `.env.example` values plus host `UID`/`GID`. Compose needs those so the container can write `hydradb-data/`.
 
 | Variable | Default | Used by |
 |---|---|---|

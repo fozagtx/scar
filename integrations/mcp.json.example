@@ -1,8 +1,9 @@
 {
   "mcpServers": {
     "scar": {
-      "command": "python",
+      "command": "/ABS/PATH/TO/scar/.venv/bin/python",
       "args": ["-m", "scar.serve.mcp_server"],
+      "cwd": "/ABS/PATH/TO/scar",
       "env": {
         "HYDRA_BOLT_URI": "bolt://127.0.0.1:7687",
         "HYDRA_HTTP_URI": "http://127.0.0.1:8443",
