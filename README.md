@@ -1,8 +1,17 @@
 # SCAR
 
-Stored Corrections And Recall. A HydraDB graph of coding-agent errors, human corrections, and the connections between them — so the next session does not repeat the same mistake.
+Stored Corrections And Recall. A HydraDB graph of coding-agent errors, human corrections, and the connections between them so the next session does not repeat the same mistake.
 
 Hack Hydra track **2B** (code graphs for IDE assistants). HydraDB OSS is the system of record; details in [HYDRA.md](HYDRA.md).
+
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![HydraDB](https://img.shields.io/badge/HydraDB-OSS_graph--node-111827?style=flat-square)](https://github.com/hydra-db/hydradb)
+[![Bolt](https://img.shields.io/badge/Bolt-5.x-018BFF?style=flat-square&logo=neo4j&logoColor=white)](https://neo4j.com/docs/bolt/)
+[![OpenCypher](https://img.shields.io/badge/OpenCypher-HTTP-E34F26?style=flat-square)](https://github.com/hydra-db/hydradb)
+[![Docker](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Pydantic](https://img.shields.io/badge/Pydantic-v2-E92063?style=flat-square)](https://docs.pydantic.dev/)
+[![MCP](https://img.shields.io/badge/MCP-stdio-111111?style=flat-square)](https://modelcontextprotocol.io/)
+[![pytest](https://img.shields.io/badge/pytest-8-0A9B5A?style=flat-square&logo=pytest&logoColor=white)](https://docs.pytest.org/)
 
 ## Features
 
@@ -20,27 +29,27 @@ HydraDB stores this ontology. Recall walks the current file, then `IMPORTS` / `C
 ```mermaid
 flowchart LR
   subgraph session["Session"]
-    Session
-    Turn
+    Session:::sess
+    Turn:::sess
     Session -->|HAS_TURN| Turn
   end
 
   subgraph code["Code graph"]
-    Importer["File — src/api.py"]
-    File["File — src/timeutil.py"]
-    Symbol["Symbol — timeutil.now"]
-    Callee["Symbol — datetime"]
-    Importer -->|IMPORTS| File
-    File --- Symbol
+    Importer["src/api.py"]:::file
+    FileN["src/timeutil.py"]:::file
+    Symbol["timeutil.now"]:::sym
+    Callee["datetime"]:::sym
+    Importer -->|IMPORTS| FileN
+    FileN --- Symbol
     Symbol -->|CALLS| Callee
   end
 
   subgraph scars["Corrections"]
-    Fail["Error — utcnow AttributeError"]
-    Retry["Error — retry"]
-    Live["Correction — use datetime.now UTC"]
-    Dead["Correction — superseded"]
-    AP["AntiPattern — banned-utcnow"]
+    Fail["utcnow AttributeError"]:::error
+    Retry["retry"]:::error
+    Live["use datetime.now UTC"]:::corr
+    Dead["superseded"]:::dead
+    AP["banned-utcnow"]:::ap
     Fail -->|LED_TO| Retry
     Fail -->|SAME_AS| Retry
     Live -->|FIXES| Fail
@@ -48,14 +57,24 @@ flowchart LR
     Fail -->|INSTANCE_OF| AP
   end
 
-  Session -->|IN_REPO| Repo
-  Turn -->|TOUCHED| File
+  Session -->|IN_REPO| Repo:::sess
+  Turn -->|TOUCHED| FileN
   Turn -->|EMITTED| Fail
-  Fail -->|IN_FILE| File
+  Fail -->|IN_FILE| FileN
   Fail -->|ON_SYMBOL| Symbol
   Live -->|STATED_IN| Turn
   AP -->|FORBIDDEN_IN| Repo
+
+  classDef file fill:#6ec8e8,stroke:#2c2c26,color:#10100e
+  classDef error fill:#ff5d4c,stroke:#2c2c26,color:#10100e
+  classDef corr fill:#d6ff3f,stroke:#2c2c26,color:#14150a
+  classDef sym fill:#e0a84a,stroke:#2c2c26,color:#10100e
+  classDef ap fill:#d989c8,stroke:#2c2c26,color:#10100e
+  classDef dead fill:#6a675c,stroke:#2c2c26,color:#e4dfd2
+  classDef sess fill:#1a1a16,stroke:#6ec8e8,color:#e4dfd2
 ```
+
+Legend: cyan File, gold Symbol, red Error, acid Correction, mauve AntiPattern, grey superseded. Same palette as the demo UI.
 
 `blast_radius` is `(:File)-[:IMPORTS*]->(:File)<-[:IN_FILE]-(:Error {signature})`. A vector index cannot answer that.
 
@@ -74,7 +93,7 @@ python3 -m venv .venv
 .venv/bin/python scripts/demo_api.py
 ```
 
-Open http://127.0.0.1:7331/ — graph in the center, superseded corrections struck through. Click path: [docs/demo-script.md](docs/demo-script.md).
+Open http://127.0.0.1:7331/ . Graph in the center, superseded corrections struck through. Click path: [docs/demo-script.md](docs/demo-script.md).
 
 Live graph:
 
