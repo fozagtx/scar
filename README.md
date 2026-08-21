@@ -26,21 +26,21 @@ flowchart LR
   end
 
   subgraph code["Code graph"]
-    Importer["File<br/>src/api.py"]
-    File["File<br/>src/timeutil.py"]
-    Symbol["Symbol<br/>timeutil.now"]
-    Callee["Symbol<br/>datetime"]
+    Importer["File — src/api.py"]
+    File["File — src/timeutil.py"]
+    Symbol["Symbol — timeutil.now"]
+    Callee["Symbol — datetime"]
     Importer -->|IMPORTS| File
     File --- Symbol
     Symbol -->|CALLS| Callee
   end
 
   subgraph scars["Corrections"]
-    Fail["Error<br/>utcnow AttributeError"]
-    Retry["Error<br/>retry"]
-    Live["Correction<br/>use datetime.now UTC"]
-    Dead["Correction<br/>superseded"]
-    AP["AntiPattern<br/>banned-utcnow"]
+    Fail["Error — utcnow AttributeError"]
+    Retry["Error — retry"]
+    Live["Correction — use datetime.now UTC"]
+    Dead["Correction — superseded"]
+    AP["AntiPattern — banned-utcnow"]
     Fail -->|LED_TO| Retry
     Fail -->|SAME_AS| Retry
     Live -->|FIXES| Fail
