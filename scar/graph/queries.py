@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any, Protocol
 
@@ -43,26 +44,57 @@ class QueryClient(Protocol):
     def query(self, cypher: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]: ...
 
 
+SEED_VERTEX = 0
+
+
+def vertex_id(label: str, key: str) -> int:
+    """HydraDB OSS requires integer node ids. Business ids stay on ``key``."""
+    digest = hashlib.sha1(f"{label}\0{key}".encode("utf-8")).digest()
+    value = int.from_bytes(digest[:8], "big") & 0x7FFFFFFFFFFFFFFF
+    return value or 1
+
+
 def _q(client: QueryClient, cypher: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     return client.query(cypher, params or {})
 
 
-def _link(client: QueryClient, from_label: str, to_label: str, rel: str, from_id: str, to_id: str) -> None:
+def _ensure(client: QueryClient, label: str, key: str, **props: Any) -> int:
+    nid = vertex_id(label, key)
     _q(
         client,
-        f"MATCH (a:{from_label} {{id: $from_id}}) "
-        f"MATCH (b:{to_label} {{id: $to_id}}) "
-        f"MERGE (a)-[:{rel}]->(b)",
-        {"from_id": from_id, "to_id": to_id},
+        f"MERGE (s:_Seed {{id: $seed}})-[:HAS]->(n:{label} {{id: $id}})",
+        {"seed": SEED_VERTEX, "id": nid},
+    )
+    assignments = ["n.key = $key"]
+    params: dict[str, Any] = {"id": nid, "key": key}
+    for name, value in props.items():
+        if value is None:
+            continue
+        assignments.append(f"n.{name} = ${name}")
+        params[name] = value
+    _q(
+        client,
+        f"MATCH (n:{label} {{id: $id}}) SET {', '.join(assignments)}",
+        params,
+    )
+    return nid
+
+
+def _link(client: QueryClient, from_label: str, to_label: str, rel: str, from_id: str, to_id: str) -> None:
+    _ensure(client, from_label, from_id)
+    _ensure(client, to_label, to_id)
+    _q(
+        client,
+        f"MERGE (a:{from_label} {{id: $from_id}})-[:{rel}]->(b:{to_label} {{id: $to_id}})",
+        {
+            "from_id": vertex_id(from_label, from_id),
+            "to_id": vertex_id(to_label, to_id),
+        },
     )
 
 
 def upsert_repo(client: QueryClient, *, id: str, root: str, language: str, **_: Any) -> str:
-    _q(
-        client,
-        "MERGE (n:Repo {id: $id}) SET n.root = $root, n.language = $language RETURN n.id AS id",
-        {"id": id, "root": root, "language": language},
-    )
+    _ensure(client, "Repo", id, root=root, language=language)
     return id
 
 
@@ -75,12 +107,13 @@ def upsert_file(
     repo_id: str | None = None,
     **_: Any,
 ) -> str:
-    _q(
+    _ensure(
         client,
-        "MERGE (n:File {id: $id}) "
-        "SET n.path = $path, n.language = $language, n.repo_id = $repo_id "
-        "RETURN n.id AS id",
-        {"id": id, "path": path, "language": language or "unknown", "repo_id": repo_id},
+        "File",
+        id,
+        path=path,
+        language=language or "unknown",
+        repo_id=repo_id,
     )
     if repo_id:
         _link(client, "File", "Repo", "IN_REPO", id, repo_id)
@@ -96,12 +129,12 @@ def upsert_symbol(
     file_id: str | None = None,
     **_: Any,
 ) -> str:
-    _q(
+    _ensure(
         client,
-        "MERGE (n:Symbol {id: $id}) "
-        "SET n.qualified_name = $qualified_name, n.kind = $kind "
-        "RETURN n.id AS id",
-        {"id": id, "qualified_name": qualified_name, "kind": kind or "unknown"},
+        "Symbol",
+        id,
+        qualified_name=qualified_name,
+        kind=kind or "unknown",
     )
     if file_id:
         _link(client, "Symbol", "File", "IN_FILE", id, file_id)
@@ -117,12 +150,12 @@ def upsert_session(
     repo_id: str | None = None,
     **_: Any,
 ) -> str:
-    _q(
+    _ensure(
         client,
-        "MERGE (n:Session {id: $id}) "
-        "SET n.source = $source, n.started_at = $started_at "
-        "RETURN n.id AS id",
-        {"id": id, "source": source, "started_at": started_at},
+        "Session",
+        id,
+        source=source,
+        started_at=started_at,
     )
     if repo_id:
         _link(client, "Session", "Repo", "IN_REPO", id, repo_id)
@@ -141,13 +174,7 @@ def upsert_turn(
     symbol_id: str | None = None,
     **_: Any,
 ) -> str:
-    _q(
-        client,
-        "MERGE (n:Turn {id: $id}) "
-        "SET n.role = $role, n.ts = $ts, n.text = $text "
-        "RETURN n.id AS id",
-        {"id": id, "role": role, "ts": ts, "text": text},
-    )
+    _ensure(client, "Turn", id, role=role, ts=ts, text=text)
     if session_id:
         _link(client, "Session", "Turn", "HAS_TURN", session_id, id)
     if file_id:
@@ -180,20 +207,15 @@ def upsert_error(
     if symbol and not symbol_id:
         symbol_id = f"sym:{symbol}"
         upsert_symbol(client, id=symbol_id, qualified_name=symbol, file_id=file_id)
-    _q(
+    _ensure(
         client,
-        "MERGE (n:Error {id: $id}) "
-        "SET n.signature = $signature, n.message = $message, n.tool = $tool, "
-        "n.exit_code = $exit_code, n.repo_id = $repo_id "
-        "RETURN n.id AS id",
-        {
-            "id": id,
-            "signature": signature,
-            "message": message or "",
-            "tool": tool,
-            "exit_code": exit_code,
-            "repo_id": repo_id,
-        },
+        "Error",
+        id,
+        signature=signature,
+        message=message or "",
+        tool=tool,
+        exit_code=exit_code,
+        repo_id=repo_id,
     )
     if file_id:
         _link(client, "Error", "File", "IN_FILE", id, file_id)
@@ -202,11 +224,7 @@ def upsert_error(
     if turn_id:
         _link(client, "Turn", "Error", "EMITTED", turn_id, id)
     if session_id:
-        _q(
-            client,
-            "MATCH (s:Session {id: $session_id}) MATCH (e:Error {id: $id}) MERGE (s)-[:EMITTED]->(e)",
-            {"session_id": session_id, "id": id},
-        )
+        _link(client, "Session", "Error", "EMITTED", session_id, id)
     return id
 
 
@@ -230,18 +248,14 @@ def upsert_correction(
         kind_value = CorrectionKind(kind).value
     except ValueError:
         kind_value = kind
-    _q(
+    _ensure(
         client,
-        "MERGE (n:Correction {id: $id}) "
-        "SET n.kind = $kind, n.text = $text, n.created_at = $created_at, n.active = $active "
-        "RETURN n.id AS id",
-        {
-            "id": id,
-            "kind": kind_value,
-            "text": text,
-            "created_at": created_at or "",
-            "active": bool(active),
-        },
+        "Correction",
+        id,
+        kind=kind_value,
+        text=text,
+        created_at=created_at or "",
+        active=bool(active),
     )
     if fixes_error_id:
         _link(client, "Correction", "Error", "FIXES", id, fixes_error_id)
@@ -251,13 +265,16 @@ def upsert_correction(
 
 
 def supersede_correction(client: QueryClient, *, newer_id: str, older_id: str, **_: Any) -> None:
+    _link(client, "Correction", "Correction", "SUPERSEDES", newer_id, older_id)
     _q(
         client,
-        "MATCH (newer:Correction {id: $newer_id}) "
-        "MATCH (older:Correction {id: $older_id}) "
-        "MERGE (newer)-[:SUPERSEDES]->(older) "
-        "SET older.active = false SET newer.active = true",
-        {"newer_id": newer_id, "older_id": older_id},
+        "MATCH (older:Correction {id: $id}) SET older.active = false",
+        {"id": vertex_id("Correction", older_id)},
+    )
+    _q(
+        client,
+        "MATCH (newer:Correction {id: $id}) SET newer.active = true",
+        {"id": vertex_id("Correction", newer_id)},
     )
 
 
@@ -274,20 +291,12 @@ def link_led_to(client: QueryClient, *, from_id: str, to_id: str, **_: Any) -> N
 
 
 def upsert_antipattern(client: QueryClient, *, id: str, name: str, description: str, **_: Any) -> str:
-    _q(
-        client,
-        "MERGE (n:AntiPattern {id: $id}) SET n.name = $name, n.description = $description RETURN n.id AS id",
-        {"id": id, "name": name, "description": description},
-    )
+    _ensure(client, "AntiPattern", id, name=name, description=description)
     return id
 
 
 def upsert_constraint(client: QueryClient, *, id: str, rule: str, active: bool = True, **_: Any) -> str:
-    _q(
-        client,
-        "MERGE (n:Constraint {id: $id}) SET n.rule = $rule, n.active = $active RETURN n.id AS id",
-        {"id": id, "rule": rule, "active": bool(active)},
-    )
+    _ensure(client, "Constraint", id, rule=rule, active=bool(active))
     return id
 
 
@@ -318,7 +327,7 @@ def _superseded_ids(client: QueryClient) -> set[str]:
     rows = _q(
         client,
         "MATCH (newer:Correction)-[:SUPERSEDES]->(older:Correction) "
-        "RETURN newer.id AS newer_id, older.id AS older_id",
+        "RETURN newer.key AS newer_id, older.key AS older_id",
     )
     return {str(row["older_id"]) for row in rows if row.get("older_id") is not None}
 
@@ -328,7 +337,7 @@ def _file_rows(client: QueryClient, repo_id: str | None, path: str | None) -> li
         return []
     rows = _q(
         client,
-        "MATCH (f:File {path: $path}) RETURN f.id AS id, f.path AS path, f.repo_id AS repo_id",
+        "MATCH (f:File {path: $path}) RETURN f.key AS id, f.path AS path, f.repo_id AS repo_id",
         {"path": path},
     )
     if repo_id:
@@ -338,12 +347,37 @@ def _file_rows(client: QueryClient, repo_id: str | None, path: str | None) -> li
 
 
 def _import_neighborhood(client: QueryClient, file_id: str) -> list[dict[str, Any]]:
-    return _q(
-        client,
-        "MATCH (f:File {id: $id})-[:IMPORTS*1..2]-(n:File) "
-        "RETURN n.id AS id, n.path AS path",
-        {"id": file_id},
-    )
+    start = vertex_id("File", file_id)
+    found: dict[str, dict[str, Any]] = {}
+    frontier = {start}
+    seen = {start}
+    for _ in range(2):
+        nxt: set[int] = set()
+        for vid in frontier:
+            rows = _q(
+                client,
+                "MATCH (origin:File {id: $id})-[:IMPORTS]->(n:File) "
+                "RETURN n.key AS id, n.path AS path, n.id AS vid",
+                {"id": vid},
+            ) + _q(
+                client,
+                "MATCH (origin:File {id: $id})<-[:IMPORTS]-(n:File) "
+                "RETURN n.key AS id, n.path AS path, n.id AS vid",
+                {"id": vid},
+            )
+            for row in rows:
+                key = str(row.get("id") or "")
+                other = row.get("vid")
+                if key:
+                    found[key] = {"id": key, "path": row.get("path")}
+                if isinstance(other, int) and other not in seen:
+                    seen.add(other)
+                    nxt.add(other)
+        frontier = nxt
+        if not frontier:
+            break
+    found.pop(file_id, None)
+    return list(found.values())
 
 
 def _call_neighborhood(client: QueryClient, qualified_name: str | None) -> list[dict[str, Any]]:
@@ -352,13 +386,13 @@ def _call_neighborhood(client: QueryClient, qualified_name: str | None) -> list[
     direct = _q(
         client,
         "MATCH (s:Symbol {qualified_name: $qualified_name}) "
-        "RETURN s.id AS id, s.qualified_name AS qualified_name",
+        "RETURN s.key AS id, s.qualified_name AS qualified_name",
         {"qualified_name": qualified_name},
     )
     hops = _q(
         client,
-        "MATCH (s:Symbol {qualified_name: $qualified_name})-[:CALLS*1..2]-(t:Symbol) "
-        "RETURN t.id AS id, t.qualified_name AS qualified_name",
+        "MATCH (s:Symbol {qualified_name: $qualified_name})-[:CALLS]->(t:Symbol) "
+        "RETURN t.key AS id, t.qualified_name AS qualified_name",
         {"qualified_name": qualified_name},
     )
     return direct + hops
@@ -367,8 +401,8 @@ def _call_neighborhood(client: QueryClient, qualified_name: str | None) -> list[
 def _errors_in_file(client: QueryClient, file_id: str) -> list[dict[str, Any]]:
     return _q(
         client,
-        "MATCH (e:Error)-[:IN_FILE]->(f:File {id: $file_id}) "
-        "RETURN e.id AS id, e.signature AS signature, e.message AS message, "
+        "MATCH (e:Error)-[:IN_FILE]->(f:File {key: $file_id}) "
+        "RETURN e.key AS id, e.signature AS signature, e.message AS message, "
         "e.tool AS tool, e.exit_code AS exit_code, e.repo_id AS repo_id, "
         "f.path AS file_path",
         {"file_id": file_id},
@@ -378,8 +412,8 @@ def _errors_in_file(client: QueryClient, file_id: str) -> list[dict[str, Any]]:
 def _errors_on_symbol(client: QueryClient, symbol_id: str) -> list[dict[str, Any]]:
     return _q(
         client,
-        "MATCH (e:Error)-[:ON_SYMBOL]->(s:Symbol {id: $symbol_id}) "
-        "RETURN e.id AS id, e.signature AS signature, e.message AS message, "
+        "MATCH (e:Error)-[:ON_SYMBOL]->(s:Symbol {key: $symbol_id}) "
+        "RETURN e.key AS id, e.signature AS signature, e.message AS message, "
         "e.tool AS tool, e.exit_code AS exit_code, e.repo_id AS repo_id, "
         "s.qualified_name AS symbol",
         {"symbol_id": symbol_id},
@@ -391,7 +425,7 @@ def _errors_by_repo(client: QueryClient, repo_id: str | None) -> list[dict[str, 
         rows = _q(
             client,
             "MATCH (e:Error {repo_id: $repo_id}) "
-            "RETURN e.id AS id, e.signature AS signature, e.message AS message, "
+            "RETURN e.key AS id, e.signature AS signature, e.message AS message, "
             "e.tool AS tool, e.exit_code AS exit_code, e.repo_id AS repo_id",
             {"repo_id": repo_id},
         )
@@ -400,7 +434,7 @@ def _errors_by_repo(client: QueryClient, repo_id: str | None) -> list[dict[str, 
     return _q(
         client,
         "MATCH (e:Error) "
-        "RETURN e.id AS id, e.signature AS signature, e.message AS message, "
+        "RETURN e.key AS id, e.signature AS signature, e.message AS message, "
         "e.tool AS tool, e.exit_code AS exit_code, e.repo_id AS repo_id",
     )
 
@@ -408,7 +442,7 @@ def _errors_by_repo(client: QueryClient, repo_id: str | None) -> list[dict[str, 
 def _error_file_path(client: QueryClient, error_id: str) -> str | None:
     rows = _q(
         client,
-        "MATCH (e:Error {id: $id})-[:IN_FILE]->(f:File) RETURN f.path AS path",
+        "MATCH (e:Error {key: $id})-[:IN_FILE]->(f:File) RETURN f.path AS path",
         {"id": error_id},
     )
     if rows and rows[0].get("path"):
@@ -419,7 +453,7 @@ def _error_file_path(client: QueryClient, error_id: str) -> str | None:
 def _error_symbol(client: QueryClient, error_id: str) -> str | None:
     rows = _q(
         client,
-        "MATCH (e:Error {id: $id})-[:ON_SYMBOL]->(s:Symbol) RETURN s.qualified_name AS qualified_name",
+        "MATCH (e:Error {key: $id})-[:ON_SYMBOL]->(s:Symbol) RETURN s.qualified_name AS qualified_name",
         {"id": error_id},
     )
     if rows and rows[0].get("qualified_name"):
@@ -430,8 +464,8 @@ def _error_symbol(client: QueryClient, error_id: str) -> str | None:
 def _corrections_for_error(client: QueryClient, error_id: str) -> list[dict[str, Any]]:
     return _q(
         client,
-        "MATCH (c:Correction)-[:FIXES]->(e:Error {id: $error_id}) "
-        "RETURN c.id AS id, c.kind AS kind, c.text AS text, "
+        "MATCH (c:Correction)-[:FIXES]->(e:Error {key: $error_id}) "
+        "RETURN c.key AS id, c.kind AS kind, c.text AS text, "
         "c.created_at AS created_at, c.active AS active",
         {"error_id": error_id},
     )
@@ -559,7 +593,7 @@ def blast_radius(client: QueryClient, error_id: str) -> dict[str, Any]:
     """Files that IMPORTS* a file which emitted the same error signature."""
     sig_rows = _q(
         client,
-        "MATCH (e:Error {id: $error_id}) RETURN e.signature AS signature",
+        "MATCH (e:Error {key: $error_id}) RETURN e.signature AS signature",
         {"error_id": error_id},
     )
     if not sig_rows or not sig_rows[0].get("signature"):
@@ -568,23 +602,37 @@ def blast_radius(client: QueryClient, error_id: str) -> dict[str, Any]:
     origins = _q(
         client,
         "MATCH (same:Error {signature: $signature})-[:IN_FILE]->(origin:File) "
-        "RETURN origin.id AS id, origin.path AS path",
+        "RETURN origin.key AS key, origin.path AS path, origin.id AS vid",
         {"signature": signature},
     )
-    origin_ids = [str(row["id"]) for row in origins if row.get("id")]
     origin_paths = [str(row["path"]) for row in origins if row.get("path")]
     importer_paths: list[str] = []
-    for origin_id in origin_ids:
-        importers = _q(
-            client,
-            "MATCH (importer:File)-[:IMPORTS*1..8]->(origin:File {id: $origin_id}) "
-            "RETURN importer.id AS id, importer.path AS path",
-            {"origin_id": origin_id},
-        )
-        for row in importers:
-            path = row.get("path")
-            if path:
-                importer_paths.append(str(path))
+    for origin in origins:
+        vid = origin.get("vid")
+        if not isinstance(vid, int):
+            continue
+        frontier = {vid}
+        seen = {vid}
+        for _ in range(8):
+            nxt: set[int] = set()
+            for current in frontier:
+                rows = _q(
+                    client,
+                    "MATCH (origin:File {id: $id})<-[:IMPORTS]-(importer:File) "
+                    "RETURN importer.path AS path, importer.id AS vid",
+                    {"id": current},
+                )
+                for row in rows:
+                    path = row.get("path")
+                    other = row.get("vid")
+                    if path:
+                        importer_paths.append(str(path))
+                    if isinstance(other, int) and other not in seen:
+                        seen.add(other)
+                        nxt.add(other)
+            frontier = nxt
+            if not frontier:
+                break
     files: list[str] = []
     seen: set[str] = set()
     for path in origin_paths + importer_paths:
@@ -632,50 +680,50 @@ def _rows_as_dicts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def export_graph(client: QueryClient) -> dict[str, Any]:
     """Dump the live HydraDB neighborhood for the demo UI. Empty store is valid."""
     repos = _rows_as_dicts(
-        _q(client, "MATCH (n:Repo) RETURN n.id AS id, n.root AS root, n.language AS language")
+        _q(client, "MATCH (n:Repo) RETURN n.key AS id, n.root AS root, n.language AS language")
     )
     files = _rows_as_dicts(
         _q(
             client,
-            "MATCH (n:File) RETURN n.id AS id, n.path AS path, n.language AS language, n.repo_id AS repo_id",
+            "MATCH (n:File) RETURN n.key AS id, n.path AS path, n.language AS language, n.repo_id AS repo_id",
         )
     )
     symbols = _rows_as_dicts(
         _q(
             client,
-            "MATCH (n:Symbol) RETURN n.id AS id, n.qualified_name AS qualified_name, n.kind AS kind",
+            "MATCH (n:Symbol) RETURN n.key AS id, n.qualified_name AS qualified_name, n.kind AS kind",
         )
     )
     sessions = _rows_as_dicts(
         _q(
             client,
-            "MATCH (n:Session) RETURN n.id AS id, n.source AS source, n.started_at AS started_at",
+            "MATCH (n:Session) RETURN n.key AS id, n.source AS source, n.started_at AS started_at",
         )
     )
     turns = _rows_as_dicts(
         _q(
             client,
-            "MATCH (n:Turn) RETURN n.id AS id, n.role AS role, n.ts AS ts, n.text AS text",
+            "MATCH (n:Turn) RETURN n.key AS id, n.role AS role, n.ts AS ts, n.text AS text",
         )
     )
     errors = _rows_as_dicts(
         _q(
             client,
-            "MATCH (n:Error) RETURN n.id AS id, n.signature AS signature, n.message AS message, "
+            "MATCH (n:Error) RETURN n.key AS id, n.signature AS signature, n.message AS message, "
             "n.tool AS tool, n.exit_code AS exit_code, n.repo_id AS repo_id",
         )
     )
     corrections = _rows_as_dicts(
         _q(
             client,
-            "MATCH (n:Correction) RETURN n.id AS id, n.kind AS kind, n.text AS text, "
+            "MATCH (n:Correction) RETURN n.key AS id, n.kind AS kind, n.text AS text, "
             "n.created_at AS created_at, n.active AS active",
         )
     )
     antipatterns = _rows_as_dicts(
         _q(
             client,
-            "MATCH (n:AntiPattern) RETURN n.id AS id, n.name AS name, n.description AS description",
+            "MATCH (n:AntiPattern) RETURN n.key AS id, n.name AS name, n.description AS description",
         )
     )
     relationships: list[dict[str, str]] = []
@@ -684,7 +732,7 @@ def export_graph(client: QueryClient) -> dict[str, Any]:
         rows = _q(
             client,
             f"MATCH (a:{from_label})-[:{rel}]->(b:{to_label}) "
-            "RETURN a.id AS src, b.id AS dst",
+            "RETURN a.key AS src, b.key AS dst",
         )
         for row in rows:
             src, dst = row.get("src"), row.get("dst")

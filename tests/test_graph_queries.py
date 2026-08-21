@@ -121,11 +121,12 @@ def test_upsert_error_cypher_shape(fake_client) -> None:
         tool="shell",
         exit_code=1,
     )
-    cypher, params = fake_client.calls[0]
-    assert "MERGE" in cypher
-    assert ":Error" in cypher
-    assert params["id"] == "err:shape"
-    assert params["signature"].endswith("src/timeutil.py")
+    assert any("MERGE" in cypher and ":Error" in cypher for cypher, _ in fake_client.calls)
+    assert any(params.get("key") == "err:shape" for _, params in fake_client.calls)
+    assert any(
+        str(params.get("signature") or "").endswith("src/timeutil.py")
+        for _, params in fake_client.calls
+    )
 
 
 def test_round_trip_write_and_recall(fake_client) -> None:
@@ -261,9 +262,9 @@ def test_miner_kwargs_upsert_error(fake_client) -> None:
         file_path="src/timeutil.py",
         symbol="timeutil.now",
     )
-    labels = fake_client.nodes["err:miner"]["_labels"]
+    labels = next(node["_labels"] for node in fake_client.nodes.values() if node.get("key") == "err:miner")
     assert "Error" in labels
-    assert "file:src/timeutil.py" in fake_client.nodes
+    assert any(node.get("path") == "src/timeutil.py" for node in fake_client.nodes.values())
 
 
 @pytest.mark.integration

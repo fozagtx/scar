@@ -208,7 +208,9 @@ class GraphClient:
                     }
                 ),
             )
-        response.raise_for_status()
+        if response.status_code >= 400:
+            detail = (response.text or "")[:500]
+            raise RuntimeError(f"HydraDB HTTP {response.status_code}: {detail}")
         return self._parse_http_rows(response.json())
 
     def _parse_http_rows(self, payload: Any) -> list[dict[str, Any]]:

@@ -11,6 +11,8 @@ dist/
 hydradb-data/
 .hydradb/
 extracted_data/
+extracted.jsonl
+extracted_show.jsonl
 node_modules/
 .DS_Store
 .claude-workspace/

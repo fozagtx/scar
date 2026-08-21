@@ -13,7 +13,7 @@ from scar.graph.client import GraphClient, hydra_is_ready
 NODE_RE = re.compile(r"\((\w+)(?::(\w+))?(?:\s*\{([^}]+)\})?\)")
 REL_RE = re.compile(
     r"\((\w+)(?::(\w+))?(?:\s*\{([^}]+)\})?\)"
-    r"\s*-\[:([A-Z_]+)(\*(\d+)\.\.(\d+))?\]-(>?)\s*"
+    r"\s*(<?)-\[:([A-Z_]+)(\*(\d+)\.\.(\d+))?\]-(>?)\s*"
     r"\((\w+)(?::(\w+))?(?:\s*\{([^}]+)\})?\)"
 )
 PROP_RE = re.compile(r"(\w+)\s*:\s*\$(\w+)")
@@ -183,14 +183,17 @@ class FakeClient:
         a_var = rel_match.group(1)
         a_label = rel_match.group(2)
         a_props = _eval_props(rel_match.group(3), params)
-        rel = rel_match.group(4)
-        varlen = rel_match.group(5)
-        min_h = int(rel_match.group(6) or 1)
-        max_h = int(rel_match.group(7) or 1)
-        directed = bool(rel_match.group(8))
-        b_var = rel_match.group(9)
-        b_label = rel_match.group(10)
-        b_props = _eval_props(rel_match.group(11), params)
+        incoming = bool(rel_match.group(4))
+        rel = rel_match.group(5)
+        varlen = rel_match.group(6)
+        min_h = int(rel_match.group(7) or 1)
+        max_h = int(rel_match.group(8) or 1)
+        outgoing_arrow = bool(rel_match.group(9))
+        b_var = rel_match.group(10)
+        b_label = rel_match.group(11)
+        b_props = _eval_props(rel_match.group(12), params)
+        directed = incoming or outgoing_arrow
+        outgoing = outgoing_arrow and not incoming
 
         a_ids = {nid: None for nid in self._nodes_matching(a_label, a_props)} if a_label or a_props else None
         b_ids = {nid: None for nid in self._nodes_matching(b_label, b_props)} if b_label or b_props else None
@@ -200,10 +203,18 @@ class FakeClient:
             for row in rows:
                 start = row.get(a_var)
                 end = row.get(b_var)
-                if start is None:
+                if start is None and a_props.get("id") is not None:
+                    start = str(a_props["id"])
+                    node = self._ensure(start, a_label)
+                    node.update(a_props)
+                elif start is None:
                     starts = [nid for nid in (a_ids or {})]
                     start = starts[0] if len(starts) == 1 else None
-                if end is None:
+                if end is None and b_props.get("id") is not None:
+                    end = str(b_props["id"])
+                    node = self._ensure(end, b_label)
+                    node.update(b_props)
+                elif end is None:
                     ends = [nid for nid in (b_ids or {})]
                     end = ends[0] if len(ends) == 1 else None
                 if start and end:
@@ -222,7 +233,7 @@ class FakeClient:
                         start,
                         rel,
                         directed=directed,
-                        outgoing=True,
+                        outgoing=outgoing,
                         min_h=min_h,
                         max_h=max_h,
                     )
@@ -231,9 +242,12 @@ class FakeClient:
                     for src, typ, dst in self.rels:
                         if typ != rel:
                             continue
-                        if directed:
+                        if directed and outgoing:
                             if src == start:
                                 ends.append(dst)
+                        elif directed and not outgoing:
+                            if dst == start:
+                                ends.append(src)
                         elif src == start:
                             ends.append(dst)
                         elif dst == start:
