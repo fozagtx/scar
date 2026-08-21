@@ -81,11 +81,11 @@ Legend: cyan File, gold Symbol, red Error, acid Correction, mauve AntiPattern, g
 ## Prerequisites
 
 - Python 3.11+
-- Docker, only if you want a live HydraDB node (the demo UI runs without it)
+- Docker (HydraDB OSS `graph-node`)
 
 ## Getting started
 
-Install once (Python 3.11+):
+Install:
 
 ```bash
 git clone https://github.com/fozagtx/scar.git
@@ -94,34 +94,39 @@ python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
-### 1. Demo UI (no Docker)
-
-```bash
-.venv/bin/python scripts/demo_api.py
-```
-
-Open http://127.0.0.1:7331/ . Graph in the center, superseded corrections struck through. Click path: `bash scripts/record_demo.sh`.
-
-### 2. Live HydraDB (local Docker)
+### 1. Local HydraDB
 
 ```bash
 ./scripts/init-hydradb-data.sh
 UID=$(id -u) GID=$(id -g) docker compose up
 ```
 
-`init-hydradb-data.sh` writes gitignored `./.env` and `./hydradb-data/`. Wait until `curl -sS http://127.0.0.1:9090/readyz` succeeds, then:
-
-```bash
-.venv/bin/python scripts/seed_fixture_graph.py
-.venv/bin/scar recall --repo demo-repo --file src/timeutil.py --error "AttributeError utcnow"
-.venv/bin/scar abstain-check --repo demo-repo --file src/unrelated.py
-```
+`init-hydradb-data.sh` writes gitignored `./.env` and `./hydradb-data/`. Wait until `curl -sS http://127.0.0.1:9090/readyz` succeeds.
 
 HydraDB stays on `127.0.0.1` (`7687` Bolt, `8443` HTTP, `9090` admin). Not `api.hydradb.com`.
 
-### 3. Local MCP
+### 2. Ingest real sessions
 
-Copy [integrations/mcp.json.example](integrations/mcp.json.example) into Cursor MCP settings. Point `command` at this repo's `.venv/bin/python` and `cwd` at the repo root. HydraDB must already be up (step 2). Cursor then spawns `python -m scar.serve.mcp_server` on stdio.
+Extract Cursor / Claude Code / Codex history from this machine, then mine it into the live graph:
+
+```bash
+.venv/bin/python -m scar.ingest extracted.jsonl --source all
+.venv/bin/scar ingest extracted.jsonl --repo $(basename "$PWD")
+```
+
+Missing assistant installs write `0` sessions. That is expected. You can also `scar record` a correction from a live session.
+
+### 3. Demo UI (live graph)
+
+```bash
+.venv/bin/python scripts/demo_api.py
+```
+
+Open http://127.0.0.1:7331/ . The SVG is `GET /graph` from HydraDB. Recall and blast call the same Cypher as the CLI. Click path: `bash scripts/record_demo.sh`.
+
+### 4. Local MCP
+
+Copy [integrations/mcp.json.example](integrations/mcp.json.example) into Cursor MCP settings. Point `command` at this repo's `.venv/bin/python` and `cwd` at the repo root. HydraDB must already be up. Cursor then spawns `python -m scar.serve.mcp_server` on stdio.
 
 Optional: copy [integrations/cursor-rule.mdc](integrations/cursor-rule.mdc) into `.cursor/rules/`. Claude Code: [integrations/claude-skill.md](integrations/claude-skill.md).
 
@@ -139,10 +144,10 @@ Ingest assistant history, then query or record:
 
 ```bash
 .venv/bin/python -m scar.ingest extracted.jsonl --source all
-.venv/bin/scar ingest extracted.jsonl --repo demo-repo
+.venv/bin/scar ingest extracted.jsonl --repo my-repo
 
-.venv/bin/scar recall --repo demo-repo --file src/timeutil.py --error "AttributeError utcnow"
-.venv/bin/scar record --repo demo-repo --file src/timeutil.py --correction "never use datetime.utcnow"
+.venv/bin/scar recall --repo my-repo --file path/to/file.py --error "the error text"
+.venv/bin/scar record --repo my-repo --file path/to/file.py --correction "the human instruction"
 ```
 
 | Command | What it does |
@@ -159,7 +164,7 @@ Recall walks the current file, then `CALLS` / `IMPORTS` neighbors, then error si
 ```text
 local sessions  →  extract  →  mine  →  HydraDB OSS
                                          ├─ scar CLI / MCP / HTTP :8765
-                                         └─ demo UI :7331 (fixture or SCAR_LIVE=1)
+                                         └─ demo UI :7331 (GET /graph from HydraDB)
 ```
 
 ## Configuration
@@ -172,14 +177,13 @@ local sessions  →  extract  →  mine  →  HydraDB OSS
 | `HYDRA_HTTP_URI` | `http://127.0.0.1:8443` | HTTP Cypher fallback |
 | `HYDRA_AUTH_TOKEN` | token file / local-dev token | Bolt and HTTP |
 | `HYDRA_ADMIN_URI` | `http://127.0.0.1:9090` | Readiness |
-| `SCAR_LIVE` | unset | Demo UI: try live `recall_for_context` |
 | `SCAR_DEMO_PORT` | `7331` | Demo UI bind port |
 
 Image: `ghcr.io/hydra-db/hydradb:latest`. SCAR does not call `api.hydradb.com`. Cypher lives only in `scar/graph/queries.py`. File-by-file map: [HYDRA.md](HYDRA.md).
 
 ## Troubleshooting
 
-**Demo UI is enough for the graph argument.** Fixture mode on `:7331` does not need Docker.
+**Demo UI requires HydraDB.** `scripts/demo_api.py` exits if `:9090` is down. Ingest real sessions first.
 
 **`docker compose up` cannot write the store.** The image runs as UID 10001; bind mounts are host-owned. Always pass `UID=$(id -u) GID=$(id -g)` (or let `.env` set them after `init-hydradb-data.sh`).
 

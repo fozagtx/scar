@@ -15,13 +15,13 @@
           <span class="mast-sub">stored corrections and recall</span>
         </div>
         <p class="mast-id">
-          <span>repo</span> <code id="mast-repo">demo-repo</code>
-          <span>lang</span> <code id="mast-lang">python</code>
+          <span>repo</span> <code id="mast-repo">—</code>
+          <span>lang</span> <code id="mast-lang">—</code>
           <span>store</span> <code>hydradb-oss</code>
         </p>
-        <p class="mast-mode" id="mast-mode" title="Fixture mode reads demo_graph.json. SCAR_LIVE=1 tries graph-core.">
+        <p class="mast-mode live" id="mast-mode" title="Reads the live HydraDB graph-node on 127.0.0.1">
           <span class="lamp" aria-hidden="true"></span>
-          <span id="mast-mode-label">FIXTURE</span>
+          <span id="mast-mode-label">LIVE</span>
           <span class="mast-host">127.0.0.1:7331</span>
         </p>
       </header>
@@ -111,19 +111,19 @@
           <h2>Recall</h2>
           <label>
             Repo
-            <input id="in-repo" name="repo_id" type="text" value="demo-repo" spellcheck="false" />
+            <input id="in-repo" name="repo_id" type="text" value="" spellcheck="false" placeholder="repo id from HydraDB" />
           </label>
           <label>
             File
-            <input id="in-file" name="file_path" type="text" value="src/timeutil.py" spellcheck="false" />
+            <input id="in-file" name="file_path" type="text" value="" spellcheck="false" placeholder="file path" />
           </label>
           <label>
             Symbol
-            <input id="in-symbol" name="symbol" type="text" value="timeutil.now" spellcheck="false" />
+            <input id="in-symbol" name="symbol" type="text" value="" spellcheck="false" placeholder="optional" />
           </label>
           <label>
             Error text
-            <input id="in-error" name="error_text" type="text" value="AttributeError utcnow" spellcheck="false" />
+            <input id="in-error" name="error_text" type="text" value="" spellcheck="false" placeholder="error text from the graph" />
           </label>
           <div class="actions">
             <button type="submit" id="btn-recall">Recall</button>
@@ -137,15 +137,14 @@
         </div>
         <div id="out" class="out" role="status" aria-live="polite">
           <p class="out-idle">
-            Repeat the utcnow mistake on <code>src/timeutil.py</code>. Recall must return the
-            active ban. <code>src/unrelated.py</code> must abstain. The grey struck node is the
-            correction <code>SUPERSEDES</code> killed.
+            Recall the selected file against HydraDB. Hits are active corrections.
+            Empty neighborhood abstains. Grey struck nodes are <code>SUPERSEDES</code>.
           </p>
         </div>
       </aside>
 
       <footer class="status">
-        <span id="status-left">loading fixture</span>
+        <span id="status-left">connecting HydraDB</span>
         <span id="status-sel">no selection</span>
         <span id="status-right">offline SVG · no CDN</span>
       </footer>

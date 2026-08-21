@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import importlib.util
-import json
 import uuid
-from pathlib import Path
 
 import pytest
 
 from scar.graph.queries import (
     blast_radius,
+    export_graph,
     link_call,
     link_import,
     recall_for_context,
@@ -22,17 +20,6 @@ from scar.graph.queries import (
     upsert_symbol,
 )
 from scar.models import Correction, CorrectionKind, Error, FileNode, Repo, Symbol
-
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def _seed_graph():
-    path = ROOT / "scripts" / "seed_fixture_graph.py"
-    spec = importlib.util.spec_from_file_location("seed_fixture_graph", path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec is not None and spec.loader is not None
-    spec.loader.exec_module(module)
-    return module.seed_graph
 
 
 def _seed_utcnow(client) -> None:
@@ -248,19 +235,17 @@ def test_blast_radius_follows_imports(fake_client) -> None:
     assert "IMPORTS" in cypher_blob
 
 
-def test_demo_fixture_seed_round_trip(fake_client) -> None:
-    payload = json.loads((ROOT / "fixtures" / "demo_graph.json").read_text(encoding="utf-8"))
-    _seed_graph()(fake_client, payload)
-    hit = recall_for_context(
-        fake_client,
-        "demo-repo",
-        "src/api.py",
-        error_text="AttributeError utcnow",
-    )
-    assert hit["abstain"] is False
-    assert any("timezone.utc" in row["correction"]["text"] for row in hit["hits"])
-    silent = recall_for_context(fake_client, "demo-repo", "src/unrelated.py")
-    assert silent["abstain"] is True
+def test_export_graph_reads_hydradb_nodes(fake_client) -> None:
+    _seed_utcnow(fake_client)
+    dumped = export_graph(fake_client)
+    paths = {row["path"] for row in dumped["files"]}
+    assert "src/api.py" in paths
+    assert dumped["repo"]["id"] == "demo-repo"
+    types = {rel["type"] for rel in dumped["relationships"]}
+    assert "IMPORTS" in types
+    assert "FIXES" in types
+    err = next(row for row in dumped["errors"] if row["id"] == "err:utcnow-attr")
+    assert err.get("file_id") == "file:src/timeutil.py"
 
 
 def test_miner_kwargs_upsert_error(fake_client) -> None:

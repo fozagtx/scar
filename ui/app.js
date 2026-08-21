@@ -2,8 +2,8 @@
   "use strict";
 
   var graph;
-  var fixture = null;
-  var selectedErrorId = "err:utcnow-attr";
+  var graphData = null;
+  var selectedErrorId = "";
 
   var $ = function (id) {
     return document.getElementById(id);
@@ -90,7 +90,7 @@
     });
     if (!(result.files || []).length) {
       var empty = document.createElement("p");
-      empty.textContent = "no importers in fixture";
+      empty.textContent = "no importers in graph";
       box.appendChild(empty);
     } else {
       box.appendChild(ol);
@@ -112,7 +112,7 @@
   function fillSessions() {
     var list = $("session-list");
     list.replaceChildren();
-    (fixture.sessions || []).forEach(function (session, idx) {
+    (graphData.sessions || []).forEach(function (session, idx) {
       var li = document.createElement("li");
       var btn = document.createElement("button");
       btn.type = "button";
@@ -129,12 +129,12 @@
           el.classList.remove("active");
         });
         btn.classList.add("active");
-        $("in-repo").value = session.repo_id || fixture.repo.id;
+        $("in-repo").value = session.repo_id || (graphData.repo && graphData.repo.id) || "";
       });
       li.appendChild(btn);
       list.appendChild(li);
     });
-    (fixture.turns || []).forEach(function (turn) {
+    (graphData.turns || []).forEach(function (turn) {
       var li = document.createElement("li");
       var btn = document.createElement("button");
       btn.type = "button";
@@ -147,19 +147,19 @@
       btn.appendChild(small);
       btn.addEventListener("click", function () {
         if (turn.file_id) {
-          var file = (fixture.files || []).find(function (f) {
+          var file = (graphData.files || []).find(function (f) {
             return f.id === turn.file_id;
           });
           if (file) $("in-file").value = file.path;
         }
         if (turn.symbol_id) {
-          var sym = (fixture.symbols || []).find(function (s) {
+          var sym = (graphData.symbols || []).find(function (s) {
             return s.id === turn.symbol_id;
           });
           if (sym) $("in-symbol").value = sym.qualified_name;
         }
-        if (turn.role === "assistant") $("in-error").value = turn.text || "utcnow";
-        if (turn.role === "user") $("in-error").value = "utcnow";
+        if (turn.role === "assistant") $("in-error").value = turn.text || "";
+        if (turn.role === "user" && turn.text) $("in-error").value = turn.text;
       });
       li.appendChild(btn);
       list.appendChild(li);
@@ -168,7 +168,7 @@
 
   function scarFileIds() {
     var ids = new Set();
-    (fixture.errors || []).forEach(function (err) {
+    (graphData.errors || []).forEach(function (err) {
       if (err.file_id) ids.add(err.file_id);
     });
     return ids;
@@ -178,7 +178,7 @@
     var list = $("file-list");
     list.replaceChildren();
     var scars = scarFileIds();
-    (fixture.files || []).forEach(function (file) {
+    (graphData.files || []).forEach(function (file) {
       var li = document.createElement("li");
       var btn = document.createElement("button");
       btn.type = "button";
@@ -202,16 +202,18 @@
         });
         btn.classList.add("active");
         $("in-file").value = file.path;
-        if (file.path === "src/unrelated.py") {
-          $("in-symbol").value = "";
-          $("in-error").value = "";
-        } else if (file.path === "src/timeutil.py") {
-          $("in-symbol").value = "timeutil.now";
-          $("in-error").value = "AttributeError utcnow";
-        } else if (file.path === "src/api.py") {
-          $("in-symbol").value = "";
-          $("in-error").value = "";
+        var err = (graphData.errors || []).find(function (e) {
+          return e.file_id === file.id;
+        });
+        $("in-error").value = err ? (err.message || err.signature || "") : "";
+        if (err) selectedErrorId = err.id;
+        var sym = null;
+        if (err && err.symbol_id) {
+          sym = (graphData.symbols || []).find(function (s) {
+            return s.id === err.symbol_id;
+          });
         }
+        $("in-symbol").value = sym ? (sym.qualified_name || "") : "";
         graph.select(file.id);
       });
       li.appendChild(btn);
@@ -293,9 +295,9 @@
     }
     if (node.kind === "Error") {
       selectedErrorId = node.id;
-      $("in-error").value = node.raw.message || node.raw.signature || "utcnow";
+      $("in-error").value = node.raw.message || node.raw.signature || "";
       if (node.raw.file_id) {
-        var file = (fixture.files || []).find(function (f) {
+        var file = (graphData.files || []).find(function (f) {
           return f.id === node.raw.file_id;
         });
         if (file) $("in-file").value = file.path;
@@ -312,8 +314,17 @@
       var fake = {
         correction: node.raw,
         error: { id: node.raw.fixes_error_id, signature: "", message: "" },
-        file_path: "src/timeutil.py",
-        symbol: "timeutil.now",
+        file_path: (function () {
+          var err = (graphData.errors || []).find(function (e) {
+            return e.id === node.raw.fixes_error_id;
+          });
+          if (!err || !err.file_id) return "";
+          var f = (graphData.files || []).find(function (row) {
+            return row.id === err.file_id;
+          });
+          return f ? f.path : "";
+        })(),
+        symbol: "",
         via: node.superseded ? "SUPERSEDES" : "FIXES",
       };
       var card = scarCard(fake);
@@ -357,32 +368,44 @@
       if (ev.key === "Escape") graph.clearHighlight();
     });
 
-    setStatus("loading fixture");
-    var fxRes = await fetch("/fixture");
-    if (!fxRes.ok) throw new Error("GET /fixture failed");
-    fixture = await fxRes.json();
-    var layout = null;
-    try {
-      var lyRes = await fetch("/layout");
-      if (lyRes.ok) layout = await lyRes.json();
-    } catch (e) {
-      layout = null;
+    setStatus("loading HydraDB");
+    var fxRes = await fetch("/graph");
+    if (!fxRes.ok) {
+      var errBody = {};
+      try {
+        errBody = await fxRes.json();
+      } catch (e) {
+        errBody = {};
+      }
+      throw new Error(errBody.error || "GET /graph failed — is graph-node up?");
+    }
+    graphData = await fxRes.json();
+    $("mast-mode-label").textContent = "LIVE";
+    $("mast-mode").classList.add("live");
+
+    var repo = graphData.repo || {};
+    $("mast-repo").textContent = repo.id || "—";
+    $("mast-lang").textContent = repo.language || "—";
+    $("repo-id").textContent = repo.id || "—";
+    $("repo-root").textContent = repo.root || "—";
+    $("in-repo").value = repo.id || "";
+
+    var firstFile = (graphData.files || [])[0];
+    if (firstFile && firstFile.path) $("in-file").value = firstFile.path;
+    var firstErr = (graphData.errors || [])[0];
+    if (firstErr) {
+      selectedErrorId = firstErr.id;
+      $("in-error").value = firstErr.message || firstErr.signature || "";
     }
 
-    $("mast-repo").textContent = fixture.repo.id;
-    $("mast-lang").textContent = fixture.repo.language;
-    $("repo-id").textContent = fixture.repo.id;
-    $("repo-root").textContent = fixture.repo.root;
-    $("in-repo").value = fixture.repo.id;
-
-    var model = graph.load(fixture, layout);
+    var model = graph.load(graphData, null);
     $("graph-counts").textContent = model.nodes.length + "n " + model.edges.length + "e";
     fillSessions();
     fillFiles();
     setStatus(
-      "fixture loaded",
+      "HydraDB",
       "graph ready",
-      escapeText(model.nodes.length) + " nodes · hand-rolled SVG"
+      escapeText(model.nodes.length) + " nodes · live"
     );
   }
 

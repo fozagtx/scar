@@ -65,14 +65,14 @@
     return false;
   }
 
-  function collectSuperseded(fixture) {
+  function collectSuperseded(payload) {
     var ids = new Set();
-    (fixture.relationships || []).forEach(function (rel) {
+    (payload.relationships || []).forEach(function (rel) {
       if (String(rel.type || "").toUpperCase() === "SUPERSEDES" && rel.to) {
         ids.add(rel.to);
       }
     });
-    (fixture.corrections || []).forEach(function (row) {
+    (payload.corrections || []).forEach(function (row) {
       if (row.supersedes_correction_id) ids.add(row.supersedes_correction_id);
       if (row.active === false) ids.add(row.id);
     });
@@ -87,13 +87,13 @@
     list.push({ type: type, from: from, to: to, key: key });
   }
 
-  function buildModel(fixture) {
+  function buildModel(payload) {
     var nodes = [];
     var edges = [];
     var seenE = new Set();
-    var superseded = collectSuperseded(fixture);
+    var superseded = collectSuperseded(payload);
 
-    (fixture.files || []).forEach(function (row) {
+    (payload.files || []).forEach(function (row) {
       nodes.push({
         id: row.id,
         kind: "File",
@@ -103,7 +103,7 @@
         superseded: false,
       });
     });
-    (fixture.symbols || []).forEach(function (row) {
+    (payload.symbols || []).forEach(function (row) {
       nodes.push({
         id: row.id,
         kind: "Symbol",
@@ -112,7 +112,7 @@
         superseded: false,
       });
     });
-    (fixture.errors || []).forEach(function (row) {
+    (payload.errors || []).forEach(function (row) {
       nodes.push({
         id: row.id,
         kind: "Error",
@@ -121,7 +121,7 @@
         superseded: false,
       });
     });
-    (fixture.corrections || []).forEach(function (row) {
+    (payload.corrections || []).forEach(function (row) {
       nodes.push({
         id: row.id,
         kind: "Correction",
@@ -130,7 +130,7 @@
         superseded: isSuperseded(row, superseded),
       });
     });
-    (fixture.antipatterns || []).forEach(function (row) {
+    (payload.antipatterns || []).forEach(function (row) {
       nodes.push({
         id: row.id,
         kind: "AntiPattern",
@@ -140,23 +140,23 @@
       });
     });
 
-    (fixture.relationships || []).forEach(function (rel) {
+    (payload.relationships || []).forEach(function (rel) {
       addRel(edges, String(rel.type || "").toUpperCase(), rel.from, rel.to, seenE);
     });
-    (fixture.errors || []).forEach(function (row) {
+    (payload.errors || []).forEach(function (row) {
       addRel(edges, "IN_FILE", row.id, row.file_id, seenE);
       addRel(edges, "ON_SYMBOL", row.id, row.symbol_id, seenE);
     });
-    (fixture.corrections || []).forEach(function (row) {
+    (payload.corrections || []).forEach(function (row) {
       addRel(edges, "FIXES", row.id, row.fixes_error_id, seenE);
       addRel(edges, "SUPERSEDES", row.id, row.supersedes_correction_id, seenE);
     });
-    (fixture.antipatterns || []).forEach(function (row) {
+    (payload.antipatterns || []).forEach(function (row) {
       (row.error_ids || []).forEach(function (eid) {
         addRel(edges, "INSTANCE_OF", eid, row.id, seenE);
       });
     });
-    (fixture.symbols || []).forEach(function (row) {
+    (payload.symbols || []).forEach(function (row) {
       if (row.file_id) addRel(edges, "IN_FILE", row.id, row.file_id, seenE);
     });
 
@@ -360,8 +360,8 @@
     );
   };
 
-  ScarGraph.prototype.load = function (fixture, layout) {
-    this.model = buildModel(fixture);
+  ScarGraph.prototype.load = function (payload, layout) {
+    this.model = buildModel(payload);
     applyLayout(this.model.nodes, layout);
     this.render();
     this.fit();

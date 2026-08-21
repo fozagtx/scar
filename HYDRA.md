@@ -27,7 +27,7 @@ Env (see `.env.example`): `HYDRA_BOLT_URI`, `HYDRA_HTTP_URI`, `HYDRA_AUTH_TOKEN`
 optional `HYDRA_ADMIN_URI`. Local token file is gitignored
 `hydradb-data/auth-token` with value `local-development-token-32-bytes`.
 
-Fixture UI on `:7331` does **not** require HydraDB. Live seed and CLI recall do.
+The demo UI on `:7331` reads HydraDB (`GET /graph`, live `recall_for_context`). Extract local sessions and ingest them before opening it.
 
 ## File-by-file map
 
@@ -37,14 +37,13 @@ Fixture UI on `:7331` does **not** require HydraDB. Live seed and CLI recall do.
 | `scripts/init-hydradb-data.sh` | Creates store/cache dirs and the auth token file compose mounts. |
 | `scar/graph/client.py` | `GraphClient.query(cypher, params)`. Bolt first via `neo4j`, HTTP fallback via `httpx`. Token from env or token file. `hydra_is_ready()` hits `:9090`. |
 | `scar/graph/schema.py` | MERGE-on-`id` convention (OpenCypher subset may not have unique constraints). |
-| `scar/graph/queries.py` | **Only file that contains Cypher.** Named ops: `upsert_repo/file/symbol/session/turn/error/correction`, `link_same_signature`, `link_call`, `link_import`, `link_led_to`, `supersede_correction`, `recall_for_context`, `blast_radius`. |
+| `scar/graph/queries.py` | **Only file that contains Cypher.** Named ops: `upsert_repo/file/symbol/session/turn/error/correction`, `link_same_signature`, `link_call`, `link_import`, `link_led_to`, `supersede_correction`, `recall_for_context`, `blast_radius`, `export_graph`. |
 | `scar/models.py` | Pydantic shapes for graph labels. Not a second database. |
-| `scripts/seed_fixture_graph.py` | Loads `fixtures/demo_graph.json` through named upserts into a live node. |
 | `scar/cli.py` | `scar ingest/recall/record` call `queries.py` through `scar.serve`. |
 | `scar/serve/http_api.py` | `POST /v1/recall` and `/v1/record` on `:8765` against the same client. |
 | `scar/serve/mcp_server.py` | MCP tools `scar_recall`, `scar_record`, `scar_blast_radius`. |
 | `scar/ingest/load_graph.py` | Emits `{op, kwargs}` matching query names. Does **not** import Hydra at module import time. |
-| `scripts/demo_api.py` | Fixture recall by default. `SCAR_LIVE=1` tries `recall_for_context` and falls back if the node is down. |
+| `scripts/demo_api.py` | UI on `:7331`. `GET /graph` is `export_graph`. Recall/blast hit HydraDB. No fixture fallback. |
 
 ## Queries a row store does not express cleanly
 

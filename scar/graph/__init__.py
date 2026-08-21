@@ -3,6 +3,7 @@
 from scar.graph.client import GraphClient, hydra_is_ready
 from scar.graph.queries import (
     blast_radius,
+    export_graph,
     link_call,
     link_import,
     link_led_to,
@@ -23,6 +24,7 @@ __all__ = [
     "GraphClient",
     "apply_schema",
     "blast_radius",
+    "export_graph",
     "hydra_is_ready",
     "link_call",
     "link_import",

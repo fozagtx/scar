@@ -597,3 +597,140 @@ def blast_radius(client: QueryClient, error_id: str) -> dict[str, Any]:
         "origin_files": origin_paths,
         "files": files,
     }
+
+
+_EXPORT_RELS: tuple[tuple[str, str, str], ...] = (
+    ("File", "IMPORTS", "File"),
+    ("File", "IN_REPO", "Repo"),
+    ("Symbol", "CALLS", "Symbol"),
+    ("Symbol", "IN_FILE", "File"),
+    ("Error", "IN_FILE", "File"),
+    ("Error", "ON_SYMBOL", "Symbol"),
+    ("Error", "LED_TO", "Error"),
+    ("Error", "SAME_AS", "Error"),
+    ("Error", "INSTANCE_OF", "AntiPattern"),
+    ("Correction", "FIXES", "Error"),
+    ("Correction", "SUPERSEDES", "Correction"),
+    ("Correction", "STATED_IN", "Turn"),
+    ("Session", "HAS_TURN", "Turn"),
+    ("Session", "IN_REPO", "Repo"),
+    ("Turn", "TOUCHED", "File"),
+    ("Turn", "EMITTED", "Error"),
+    ("AntiPattern", "FORBIDDEN_IN", "Repo"),
+)
+
+
+def _rows_as_dicts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        item = {key: value for key, value in row.items() if value is not None}
+        if item.get("id"):
+            out.append(item)
+    return out
+
+
+def export_graph(client: QueryClient) -> dict[str, Any]:
+    """Dump the live HydraDB neighborhood for the demo UI. Empty store is valid."""
+    repos = _rows_as_dicts(
+        _q(client, "MATCH (n:Repo) RETURN n.id AS id, n.root AS root, n.language AS language")
+    )
+    files = _rows_as_dicts(
+        _q(
+            client,
+            "MATCH (n:File) RETURN n.id AS id, n.path AS path, n.language AS language, n.repo_id AS repo_id",
+        )
+    )
+    symbols = _rows_as_dicts(
+        _q(
+            client,
+            "MATCH (n:Symbol) RETURN n.id AS id, n.qualified_name AS qualified_name, n.kind AS kind",
+        )
+    )
+    sessions = _rows_as_dicts(
+        _q(
+            client,
+            "MATCH (n:Session) RETURN n.id AS id, n.source AS source, n.started_at AS started_at",
+        )
+    )
+    turns = _rows_as_dicts(
+        _q(
+            client,
+            "MATCH (n:Turn) RETURN n.id AS id, n.role AS role, n.ts AS ts, n.text AS text",
+        )
+    )
+    errors = _rows_as_dicts(
+        _q(
+            client,
+            "MATCH (n:Error) RETURN n.id AS id, n.signature AS signature, n.message AS message, "
+            "n.tool AS tool, n.exit_code AS exit_code, n.repo_id AS repo_id",
+        )
+    )
+    corrections = _rows_as_dicts(
+        _q(
+            client,
+            "MATCH (n:Correction) RETURN n.id AS id, n.kind AS kind, n.text AS text, "
+            "n.created_at AS created_at, n.active AS active",
+        )
+    )
+    antipatterns = _rows_as_dicts(
+        _q(
+            client,
+            "MATCH (n:AntiPattern) RETURN n.id AS id, n.name AS name, n.description AS description",
+        )
+    )
+    relationships: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for from_label, rel, to_label in _EXPORT_RELS:
+        rows = _q(
+            client,
+            f"MATCH (a:{from_label})-[:{rel}]->(b:{to_label}) "
+            "RETURN a.id AS src, b.id AS dst",
+        )
+        for row in rows:
+            src, dst = row.get("src"), row.get("dst")
+            if not src or not dst:
+                continue
+            key = (rel, str(src), str(dst))
+            if key in seen:
+                continue
+            seen.add(key)
+            relationships.append({"type": rel, "from": str(src), "to": str(dst)})
+
+    errors_by_id = {str(row["id"]): row for row in errors}
+    symbols_by_id = {str(row["id"]): row for row in symbols}
+    sessions_by_id = {str(row["id"]): row for row in sessions}
+    turns_by_id = {str(row["id"]): row for row in turns}
+    for rel in relationships:
+        src, dst, kind = rel["from"], rel["to"], rel["type"]
+        if kind == "IN_FILE" and src in errors_by_id:
+            errors_by_id[src]["file_id"] = dst
+        if kind == "ON_SYMBOL" and src in errors_by_id:
+            errors_by_id[src]["symbol_id"] = dst
+        if kind == "IN_FILE" and src in symbols_by_id:
+            symbols_by_id[src]["file_id"] = dst
+        if kind == "IN_REPO" and src in sessions_by_id:
+            sessions_by_id[src]["repo_id"] = dst
+        if kind == "TOUCHED" and src in turns_by_id:
+            turns_by_id[src]["file_id"] = dst
+        if kind == "FIXES":
+            for row in corrections:
+                if row.get("id") == src:
+                    row["fixes_error_id"] = dst
+        if kind == "SUPERSEDES":
+            for row in corrections:
+                if row.get("id") == src:
+                    row["supersedes_correction_id"] = dst
+
+    repo = repos[0] if repos else {"id": "", "root": "", "language": ""}
+    return {
+        "repo": repo,
+        "repos": repos,
+        "files": files,
+        "symbols": symbols,
+        "sessions": sessions,
+        "turns": turns,
+        "errors": errors,
+        "corrections": corrections,
+        "antipatterns": antipatterns,
+        "relationships": relationships,
+    }
